@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Расчет нагрузки на перекрытие</title>
+    <link rel="stylesheet" href="/resources/styles/main.css">
+</head>
+
+<body class="calc-page">
+    
+    <header>
+        <div><a class="logo" href="/loads">Каталог нагрузок</a></div>
+    </header>
+
+    <div class="header-text">Расчет нагрузки на перекрытие</div>
+    <div class="header-line"></div>
+
+    <div class="container-forms">
+        <div class="form-card">
+            <form class="form">
+                <label><span>Тип помещения</span> <input id="purpose" type="text" value="{{.roomType}}"></label>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        {{range .loadsInCalc}}
+        <div class="card">
+            <img class="card-img" src="{{.Load.LoadImage}}" alt="">
+            <p class="card-title">{{.Load.LoadTitle}}</p>
+            <div class="calc-row">
+                <span>Площадь (м²):</span>
+                <input class="area-input" type="number" min="0" step="1" value="{{.Area}}">
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    <div class="result-container">
+        <div class="result-box">
+            Общая нагрузка на перекрытие: {{.totalLoadKg}} кг
+        </div>
+    </div>
+
+</body>
+</html>
+
