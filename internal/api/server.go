@@ -26,7 +26,7 @@ func StartServer() {
 
 	r.GET("/loads", handler.GetLoads)
 	r.GET("/load/:id", handler.GetLoad)
-	r.GET("/calc", handler.GetCalc)
+	r.GET("/load_calculation", handler.GetCalc)
 
 	r.Run()
 

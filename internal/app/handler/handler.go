@@ -77,7 +77,7 @@ func (h *Handler) GetCalc(ctx *gin.Context) {
 		loadsInCalc = append(loadsInCalc, loadWithArea{Load: item.Load, Area: item.Area})
 	}
 
-	ctx.HTML(http.StatusOK, "calc.html", gin.H{
+	ctx.HTML(http.StatusOK, "load_calculation.html", gin.H{
 		"loadsInCalc": loadsInCalc,
 		"roomType":    page.RoomType,
 		"totalLoadKg": page.TotalLoadKg,
