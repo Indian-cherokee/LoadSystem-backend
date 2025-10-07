@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" href="/resources/styles/main.css">
+</head>
+
+<body>
+
+    <header>
+    <div class="logo">Каталог нагрузок</div>
+    </header>
+
+    
+
+    <div class="search-container">
+        <div class="search-wrapper">
+            <form action="/loads" method="GET">
+                <input class="search-input" type="text" name="searchingLoads" placeholder="Поиск" value="{{ .loadsSearch }}">
+            </form>
+            <div class="cart-container">
+                {{if gt .load_sessionID 0}}
+                <a class="cart-button" href="/load_calculation/{{.load_sessionID}}">
+                    <img src="http://localhost:9000/rip/image1.png" alt="Корзина">
+                </a>
+                {{else}}
+                <div class="cart-button cart-button-disabled" onclick="showEmptyCartMessage()">
+                    <img src="http://localhost:9000/rip/image1.png" alt="Корзина">
+                </div>
+                {{end}}
+                <div class="cart-indicator">
+                    {{.loadsCount}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        {{range .loads}}
+        <div class="card-box">
+            <a class="card" href="/load/{{ .ID }}" style="text-decoration:none;color:inherit;">
+                <img class="card-img" src="{{.LoadImage}}" alt="">
+                <div class="card-content card-content-for-loads">
+                    <p class="card-title">{{.LoadTitle}}</p>
+                    <p class="card-text">Норматив: {{.Normative}} кг/м²</p>
+                    <form class="card-add-form" action="/load_calculation/add/load/{{ .ID }}" method="POST">
+                        <button type="submit" class="btn-add">Добавить</button>
+                    </form>
+                </div>
+            </a>
+        </div>
+        {{end}}
+    </div>
+
+</body>
+</html>
+

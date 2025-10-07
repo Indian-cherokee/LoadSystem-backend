@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" href="/resources/styles/main.css">
+</head>
+
+<body class="calc-page">
+    
+    <header>
+        <div><a class="logo" href="/loads">Каталог нагрузок</a></div>
+    </header>
+
+    <div class="header-text">Расчет нагрузки на перекрытие</div>
+
+    <div class="container-forms">
+        <div class="form-card">
+            <form class="form">
+                <label><span>Тип помещения</span> <input id="purpose" type="text" value=""></label>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        {{range .LoadsLink}}
+        <div class="card">
+            <img class="card-img" src="{{.Load.LoadImage}}" alt="">
+            <p class="card-title">{{.Load.LoadTitle}}</p>
+            <div class="calc-row">
+                <span>Площадь (м²):</span>
+                <input class="area-input" type="number" min="0" step="1" value="">
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    <div class="result-container">
+        <div class="result-box">
+            Общая нагрузка на перекрытие: 29587 кг
+        </div>
+    </div>
+
+    <!-- Кнопка удаления заявки -->
+    <div class="delete-container">
+        <form action="/load_calculation/{{.ID}}/delete" method="POST" onsubmit="return confirm('Вы уверены, что хотите удалить эту заявку?')">
+            <button type="submit" class="btn-delete"> Удалить заявку</button>
+        </form>
+    </div>
+
+</body>
+</html>
+

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" href="/resources/styles/main.css">
+</head>
+
+<body>
+    
+    <header>
+        <div><a class="logo" href="/loads">Каталог нагрузок</a></div>
+    </header>
+
+    <div class="container">
+        <div class="card card-for-one-load">
+            <img class="card-img" src="{{.LoadImage}}" alt="">
+            <div class="card-content">
+                <p class="card-title">{{.LoadTitle}}</p>
+                <div class="load-info">
+                    <div class="info-row">
+                        <span class="info-label">Норматив:</span>
+                        <span class="info-value">{{.Normative}} кг/м²</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Категория нагрузки:</span>
+                        <span class="info-value">{{.LoadCategory}}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Коэффициент надежности:</span>
+                        <span class="info-value">{{.ReliabilityCoefficient}}</span>
+                    </div>
+                </div>
+                <p class="card-text">{{.LoadDescription}}</p>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
+
