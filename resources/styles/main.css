@@ -67,7 +67,6 @@ header {
     max-width: 1200px;
 }
 
-/* wrapper для выравнивания кнопки на всех карточках */
 .card-box{
     width: 380px;
     position: relative;
@@ -118,14 +117,12 @@ header {
     align-items: flex-start;
 }
 
-/* позиционирование формы с кнопкой добавления */
 .card-add-form{
     position: absolute;
     right: 25px;
     bottom: -14px;
 }
 
-/* кнопка Добавить: жёлтая как .logo, без контура */
 .btn-add{
     font-family: 'Poppins', sans-serif;
     font-size: 16px;
@@ -148,7 +145,6 @@ header {
 .btn-add:active{ transform: translateY(0); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .btn-add:focus{ outline: none; }
 
-/* Кнопка удаления */
 .delete-container {
     display: flex;
     justify-content: center;

@@ -21,7 +21,7 @@ func (r *Repository) GetAllLoads() ([]ds.Loads, error) {
 
 func (r *Repository) SearchLoadsByName(title string) ([]ds.Loads, error) {
 	var loads []ds.Loads
-	err := r.db.Where("load_title ILIKE ?", "%"+title+"%").Find(&loads).Error // добавили условие
+	err := r.db.Where("load_title ILIKE ?", "%"+title+"%").Find(&loads).Error
 	if err != nil {
 		return nil, err
 	}

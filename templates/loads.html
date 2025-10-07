@@ -19,18 +19,16 @@
                 <input class="search-input" type="text" name="searchingLoads" placeholder="Поиск" value="{{ .loadsSearch }}">
             </form>
             <div class="cart-container">
-                {{if gt .load_sessionID 0}}
-                <a class="cart-button" href="/load_calculation/{{.load_sessionID}}">
-                    <img src="http://localhost:9000/rip/image1.png" alt="Корзина">
-                </a>
-                {{else}}
-                <div class="cart-button cart-button-disabled" onclick="showEmptyCartMessage()">
-                    <img src="http://localhost:9000/rip/image1.png" alt="Корзина">
-                </div>
-                {{end}}
-                <div class="cart-indicator">
-                    {{.loadsCount}}
-                </div>
+                {{ if gt .load_sessionID 0 }}
+                    <a class="cart-button" href="/load_calculation/{{ .load_sessionID }}">
+                        <img src="http://localhost:9000/rip/image1.png" alt="Корзина">
+                    </a>
+                    <div class="cart-indicator">{{.loadsCount}}</div>
+                {{ else }}
+                    <a class="cart-button" style="cursor: not-allowed;">
+                        <img src="http://localhost:9000/rip/image1.png" alt="Корзина" style="opacity: 0.5;">
+                    </a>
+                {{ end }}
             </div>
         </div>
     </div>
@@ -54,4 +52,3 @@
 
 </body>
 </html>
-

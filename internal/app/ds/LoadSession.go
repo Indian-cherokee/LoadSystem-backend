@@ -7,8 +7,8 @@ type LoadSession struct {
 	Status    int       `gorm:"column:status;not null"`
 	CreatedAt time.Time `gorm:"column:created_at;not null"`
 	CreatorID uint      `gorm:"column:creator_id;not null"`
+	RoomType  *string   `gorm:"column:room_type"`
 
-	// Связи
 	Creator   Users               `gorm:"foreignKey:CreatorID"`
 	LoadsLink []LoadToCalculation `gorm:"foreignKey:LoadSessionID"`
 }
