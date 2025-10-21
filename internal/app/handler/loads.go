@@ -6,67 +6,186 @@ import (
 	"web/internal/app/ds"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
-func (h *Handler) GetAllLoads(ctx *gin.Context) {
-	var loads []ds.Loads
-	var err error
+func (h *Handler) GetLoads(c *gin.Context) {
+	search := c.Query("search")
+	category := c.Query("category")
 
-	searchingLoads := ctx.Query("searchingLoads")
-	if searchingLoads == "" {
-		loads, err = h.Repository.GetAllLoads()
-	} else {
-		loads, err = h.Repository.SearchLoadsByName(searchingLoads)
-	}
-
+	loads, err := h.Repository.GetLoadsFiltered(search, category)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		logrus.Error(err)
+		h.errorHandler(c, http.StatusInternalServerError, err)
 		return
 	}
 
-	draftLoadSession, err := h.Repository.GetDraftLoadSession(hardcodedUserID)
-	var load_sessionID uint = 0
-	var loadsCount int = 0
-
-	if err == nil && draftLoadSession != nil {
-		fullLoadSession, err := h.Repository.GetLoadSessionWithLoads(draftLoadSession.ID)
-		if err == nil {
-			load_sessionID = fullLoadSession.ID
-			loadsCount = len(fullLoadSession.LoadsLink)
-		}
+	var loadDTOs []ds.LoadDTO
+	for _, load := range loads {
+		loadDTOs = append(loadDTOs, ds.LoadDTO{
+			ID:                     load.ID,
+			LoadTitle:              load.LoadTitle,
+			LoadDescription:        load.LoadDescription,
+			LoadImage:              load.LoadImage,
+			Normative:              load.Normative,
+			LoadCategory:           load.LoadCategory,
+			ReliabilityCoefficient: load.ReliabilityCoefficient,
+			Status:                 load.Status,
+		})
 	}
 
-	ctx.HTML(http.StatusOK, "loads.html", gin.H{
-		"loads":          loads,
-		"loadsSearch":    searchingLoads,
-		"load_sessionID": load_sessionID,
-		"loadsCount":     loadsCount,
+	c.JSON(http.StatusOK, ds.PaginatedResponse{
+		Items: loadDTOs,
+		Total: int64(len(loadDTOs)),
 	})
 }
 
-func (h *Handler) GetLoadByID(ctx *gin.Context) {
-	strId := ctx.Param("id")
-	id, err := strconv.Atoi(strId)
+func (h *Handler) GetLoadByID(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		logrus.Error(err)
+		h.errorHandler(c, http.StatusBadRequest, err)
 		return
 	}
 
-	load, err := h.Repository.GetLoadByID(id)
+	load, err := h.Repository.GetLoadByID(uint(id))
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		logrus.Error(err)
+		h.errorHandler(c, http.StatusNotFound, err)
 		return
 	}
 
-	ctx.HTML(http.StatusOK, "load.html", load)
+	loadDTO := ds.LoadDTO{
+		ID:                     load.ID,
+		LoadTitle:              load.LoadTitle,
+		LoadDescription:        load.LoadDescription,
+		LoadImage:              load.LoadImage,
+		Normative:              load.Normative,
+		LoadCategory:           load.LoadCategory,
+		ReliabilityCoefficient: load.ReliabilityCoefficient,
+		Status:                 load.Status,
+	}
+
+	c.JSON(http.StatusOK, loadDTO)
+}
+
+func (h *Handler) CreateLoad(c *gin.Context) {
+	var req ds.LoadCreateRequest
+	if err := c.BindJSON(&req); err != nil {
+		h.errorHandler(c, http.StatusBadRequest, err)
+		return
+	}
+
+	statusValue := false
+	load := ds.Loads{
+		LoadTitle:              req.LoadTitle,
+		LoadDescription:        req.LoadDescription,
+		Normative:              req.Normative,
+		LoadCategory:           req.LoadCategory,
+		ReliabilityCoefficient: req.ReliabilityCoefficient,
+		Status:                 &statusValue,
+	}
+
+	if err := h.Repository.CreateLoad(&load); err != nil {
+		h.errorHandler(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	loadDTO := ds.LoadDTO{
+		ID:                     load.ID,
+		LoadTitle:              load.LoadTitle,
+		LoadDescription:        load.LoadDescription,
+		LoadImage:              load.LoadImage,
+		Normative:              load.Normative,
+		LoadCategory:           load.LoadCategory,
+		ReliabilityCoefficient: load.ReliabilityCoefficient,
+		Status:                 load.Status,
+	}
+
+	c.JSON(http.StatusCreated, loadDTO)
+}
+
+func (h *Handler) UpdateLoad(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		h.errorHandler(c, http.StatusBadRequest, err)
+		return
+	}
+
+	var req ds.LoadUpdateRequest
+	if err := c.BindJSON(&req); err != nil {
+		h.errorHandler(c, http.StatusBadRequest, err)
+		return
+	}
+
+	load, err := h.Repository.UpdateLoad(uint(id), req)
+	if err != nil {
+		h.errorHandler(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	loadDTO := ds.LoadDTO{
+		ID:                     load.ID,
+		LoadTitle:              load.LoadTitle,
+		LoadDescription:        load.LoadDescription,
+		LoadImage:              load.LoadImage,
+		Normative:              load.Normative,
+		LoadCategory:           load.LoadCategory,
+		ReliabilityCoefficient: load.ReliabilityCoefficient,
+		Status:                 load.Status,
+	}
+
+	c.JSON(http.StatusOK, loadDTO)
+}
+
+func (h *Handler) DeleteLoad(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		h.errorHandler(c, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := h.Repository.DeleteLoad(uint(id)); err != nil {
+		h.errorHandler(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusNoContent, ds.SuccessResponse{
+		Message: "Нагрузка удалена",
+	})
+}
+
+func (h *Handler) UploadLoadImage(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		h.errorHandler(c, http.StatusBadRequest, err)
+		return
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		h.errorHandler(c, http.StatusBadRequest, err)
+		return
+	}
+
+	imageURL, err := h.Repository.UploadLoadImage(uint(id), file)
+	if err != nil {
+		h.errorHandler(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"image": imageURL})
+}
+
+func (h *Handler) AddLoadToDraft(c *gin.Context) {
+	loadID, err := strconv.Atoi(c.Param("load_id"))
+	if err != nil {
+		h.errorHandler(c, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := h.Repository.AddLoadToDraft(hardcodedUserID, uint(loadID)); err != nil {
+		h.errorHandler(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, ds.SuccessResponse{
+		Message: "Черновик создан. Нагрузка добавлена в черновик.",
+	})
 }

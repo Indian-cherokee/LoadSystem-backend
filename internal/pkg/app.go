@@ -27,8 +27,8 @@ func NewApp(c *config.Config, r *gin.Engine, h *handler.Handler) *Application {
 func (a *Application) RunApp() {
 	logrus.Info("Server start up")
 
-	a.Handler.RegisterHandler(a.Router)
-	a.Handler.RegisterStatic(a.Router)
+	api := a.Router.Group("/api")
+	a.Handler.RegisterAPI(api)
 
 	serverAddress := fmt.Sprintf("%s:%d", a.Config.ServiceHost, a.Config.ServicePort)
 	if err := a.Router.Run(serverAddress); err != nil {
