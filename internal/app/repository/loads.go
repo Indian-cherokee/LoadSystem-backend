@@ -44,8 +44,6 @@ func (r *Repository) GetLoadByID(id uint) (*ds.Loads, error) {
 	return &load, nil
 }
 
-// API методы для нагрузок
-
 func (r *Repository) GetLoadsFiltered(search, category string) ([]ds.Loads, error) {
 	var loads []ds.Loads
 	query := r.db
@@ -188,10 +186,9 @@ func (r *Repository) UploadLoadImage(id uint, file *multipart.FileHeader) (strin
 }
 
 func (r *Repository) AddLoadToDraft(userID, loadID uint) error {
-	// Получаем или создаем черновик
 	draft, err := r.GetDraftLoadSession(userID)
 	if err != nil {
-		// Создаем новый черновик
+
 		newDraft := ds.LoadSession{
 			CreatorID: userID,
 			Status:    ds.StatusDraft,
@@ -202,6 +199,5 @@ func (r *Repository) AddLoadToDraft(userID, loadID uint) error {
 		draft = &newDraft
 	}
 
-	// Добавляем нагрузку в черновик
 	return r.AddLoadToLoadSession(draft.ID, loadID)
 }
