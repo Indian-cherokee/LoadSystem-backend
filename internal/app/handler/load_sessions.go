@@ -53,10 +53,19 @@ func (h *Handler) GetLoadSessions(c *gin.Context) {
 			CreatorID:   session.CreatorID,
 			ModeratorID: nil,
 			RoomType:    session.RoomType,
+			TotalLoad:   nil, // По умолчанию null, если не рассчитано
 		}
 
 		if session.ModeratorID != nil {
 			sessionDTO.ModeratorID = session.ModeratorID
+		}
+
+		// Если сессия завершена, рассчитываем total_load
+		if session.Status == ds.StatusCompleted {
+			totalLoad, err := h.Repository.CalculateTotalLoad(session.ID)
+			if err == nil {
+				sessionDTO.TotalLoad = &totalLoad
+			}
 		}
 
 		sessionDTOs = append(sessionDTOs, sessionDTO)
@@ -101,14 +110,16 @@ func (h *Handler) GetLoadSession(c *gin.Context) {
 		ModeratorID: session.ModeratorID,
 		RoomType:    session.RoomType,
 		Loads:       loads,
+		TotalLoad:   nil, // По умолчанию null, если не рассчитано
 	}
 
-	// Если сессия завершена, добавляем результат расчета
+	// Если сессия завершена, рассчитываем и добавляем результат
 	if session.Status == ds.StatusCompleted {
 		totalLoad, err := h.Repository.CalculateTotalLoad(session.ID)
 		if err == nil {
 			sessionDTO.TotalLoad = &totalLoad
 		}
+		// Если ошибка при расчете, остается nil
 	}
 
 	c.JSON(http.StatusOK, sessionDTO)

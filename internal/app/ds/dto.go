@@ -36,7 +36,7 @@ type LoadSessionDTO struct {
 	CreatorID   uint               `json:"creator_id"`
 	ModeratorID *uint              `json:"moderator_id"`
 	RoomType    *string            `json:"room_type"`
-	TotalLoad   *float64           `json:"total_load,omitempty"`
+	TotalLoad   *float64           `json:"total_load"`
 	Loads       []LoadInSessionDTO `json:"loads,omitempty"`
 }
 
