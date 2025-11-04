@@ -71,11 +71,13 @@ type CartBadgeDTO struct {
 
 type UserDTO struct {
 	ID        uint   `json:"id"`
+	FullName  string `json:"full_name"`
 	Username  string `json:"username"`
 	Moderator bool   `json:"moderator"`
 }
 
 type UserRegisterRequest struct {
+	FullName string `json:"full_name" binding:"required"`
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
@@ -86,6 +88,7 @@ type UserLoginRequest struct {
 }
 
 type UserUpdateRequest struct {
+	FullName *string `json:"full_name"`
 	Username *string `json:"username"`
 	Password *string `json:"password"`
 }

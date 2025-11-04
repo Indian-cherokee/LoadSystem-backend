@@ -57,9 +57,13 @@ func (r *Repository) LogicallyDeleteLoadSession(load_sessionID uint) error {
 	return result.Error
 }
 
-func (r *Repository) GetLoadSessionsFiltered(status, from, to string) ([]ds.LoadSession, error) {
+func (r *Repository) GetLoadSessionsFiltered(userID uint, isModerator bool, status, from, to string) ([]ds.LoadSession, error) {
 	var sessions []ds.LoadSession
-	query := r.db.Where("status != ?", ds.StatusDeleted)
+	query := r.db.Where("status != ? AND status != ?", ds.StatusDeleted, ds.StatusDraft)
+
+	if !isModerator {
+		query = query.Where("creator_id = ?", userID)
+	}
 
 	if status != "" {
 		var statusInt int

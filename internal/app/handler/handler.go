@@ -1,49 +1,69 @@
 package handler
 
 import (
+	"web/internal/app/config"
+	"web/internal/app/redis"
 	"web/internal/app/repository"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
-const hardcodedUserID = 1
-
 type Handler struct {
 	Repository *repository.Repository
+	Redis      *redis.Client
+	JWTConfig  *config.JWTConfig
 }
 
-func NewHandler(r *repository.Repository) *Handler {
+func NewHandler(r *repository.Repository, redisClient *redis.Client, jwtConfig *config.JWTConfig) *Handler {
 	return &Handler{
 		Repository: r,
+		Redis:      redisClient,
+		JWTConfig:  jwtConfig,
 	}
 }
 
-func (h *Handler) RegisterAPI(router *gin.RouterGroup) {
-	router.GET("/loads", h.GetLoads)
-	router.GET("/loads/:id", h.GetLoadByID)
-	router.POST("/loads", h.CreateLoad)
-	router.PUT("/loads/:id", h.UpdateLoad)
-	router.DELETE("/loads/:id", h.DeleteLoad)
-	router.POST("/loads/:id/image", h.UploadLoadImage)
-	router.POST("/load-sessions/draft/loads/:load_id", h.AddLoadToDraft)
+func (h *Handler) RegisterAPI(r *gin.RouterGroup) {
 
-	router.GET("/load-sessions/cart", h.GetCartBadge)
-	router.GET("/load-sessions", h.GetLoadSessions)
-	router.GET("/load-sessions/:id", h.GetLoadSession)
-	router.PUT("/load-sessions/:id", h.UpdateLoadSession)
-	router.PUT("/load-sessions/:id/form", h.FormLoadSession)
-	router.PUT("/load-sessions/:id/resolve", h.ResolveLoadSession)
-	router.DELETE("/load-sessions/:id", h.DeleteLoadSession)
+	// Доступны всем
+	r.POST("/users", h.RegisterUser)
+	r.POST("/auth/login", h.Login)
+	r.GET("/loads", h.GetLoads)
+	r.GET("/loads/:id", h.GetLoadByID)
 
-	router.DELETE("/load-sessions/:id/loads/:load_id", h.RemoveLoadFromSession)
-	router.PUT("/load-sessions/:id/loads/:load_id", h.UpdateLoadToCalculation)
+	// Эндпоинты, доступные только авторизованным пользователям
+	auth := r.Group("/")
+	auth.Use(h.AuthMiddleware)
+	{
+		// Пользователи
+		auth.POST("/auth/logout", h.Logout)
+		auth.GET("/users/:id", h.GetUserData)
+		auth.PUT("/users/:id", h.UpdateUserData)
+		// Сессии загрузок
+		auth.POST("/load-sessions/draft/loads/:load_id", h.AddLoadToDraft)
+		auth.GET("/load-sessions/cart", h.GetCartBadge)
+		auth.GET("/load-sessions", h.GetLoadSessions)
+		auth.GET("/load-sessions/:id", h.GetLoadSession)
+		auth.PUT("/load-sessions/:id", h.UpdateLoadSession)
+		auth.PUT("/load-sessions/:id/form", h.FormLoadSession)
+		auth.DELETE("/load-sessions/:id", h.DeleteLoadSession)
+		auth.DELETE("/load-sessions/:id/loads/:load_id", h.RemoveLoadFromSession)
+		auth.PUT("/load-sessions/:id/loads/:load_id", h.UpdateLoadToCalculation)
+	}
 
-	router.POST("/users", h.RegisterUser)
-	router.GET("/users/:id", h.GetUserData)
-	router.PUT("/users/:id", h.UpdateUserData)
-	router.POST("/auth/login", h.Login)
-	router.POST("/auth/logout", h.Logout)
+	// Эндпоинты, доступные только модераторам
+	moderator := r.Group("/")
+	moderator.Use(h.AuthMiddleware, h.ModeratorMiddleware)
+	{
+		// Управление нагрузками (создание, изменение, удаление)
+		moderator.POST("/loads", h.CreateLoad)
+		moderator.PUT("/loads/:id", h.UpdateLoad)
+		moderator.DELETE("/loads/:id", h.DeleteLoad)
+		moderator.POST("/loads/:id/image", h.UploadLoadImage)
+
+		// Управление сессиями (завершение/отклонение)
+		moderator.PUT("/load-sessions/:id/resolve", h.ResolveLoadSession)
+	}
 }
 
 func (h *Handler) errorHandler(ctx *gin.Context, errorStatusCode int, err error) {

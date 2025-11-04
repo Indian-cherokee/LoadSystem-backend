@@ -8,6 +8,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	_ "web/docs"
+
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 type Application struct {
@@ -26,6 +31,8 @@ func NewApp(c *config.Config, r *gin.Engine, h *handler.Handler) *Application {
 
 func (a *Application) RunApp() {
 	logrus.Info("Server start up")
+
+	a.Router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	api := a.Router.Group("/api")
 	a.Handler.RegisterAPI(api)

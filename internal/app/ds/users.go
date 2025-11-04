@@ -2,6 +2,7 @@ package ds
 
 type Users struct {
 	ID        uint   `gorm:"primaryKey;column:id"`
+	FullName  string `gorm:"column:full_name;size:255;not null"`
 	Username  string `gorm:"unique;column:username;size:255;not null"`
 	Password  string `gorm:"column:password;size:255;not null"`
 	Moderator bool   `gorm:"column:moderator;not null"`

@@ -1,0 +1,901 @@
+basePath: /api
+definitions:
+  ds.CartBadgeDTO:
+    properties:
+      load_session_id:
+        type: integer
+      loads_count:
+        type: integer
+    type: object
+  ds.LoadCreateRequest:
+    properties:
+      load_category:
+        type: string
+      load_description:
+        type: string
+      load_title:
+        type: string
+      normative:
+        type: number
+      reliability_coefficient:
+        type: number
+    required:
+    - load_category
+    - load_description
+    - load_title
+    - normative
+    - reliability_coefficient
+    type: object
+  ds.LoadDTO:
+    properties:
+      id:
+        type: integer
+      load_category:
+        type: string
+      load_description:
+        type: string
+      load_image:
+        type: string
+      load_title:
+        type: string
+      normative:
+        type: number
+      reliability_coefficient:
+        type: number
+      status:
+        type: boolean
+    type: object
+  ds.LoadInSessionDTO:
+    properties:
+      area:
+        type: integer
+      load_category:
+        type: string
+      load_id:
+        type: integer
+      load_image:
+        type: string
+      load_title:
+        type: string
+      normative:
+        type: number
+    type: object
+  ds.LoadSessionDTO:
+    properties:
+      created_at:
+        type: string
+      creator_id:
+        type: integer
+      id:
+        type: integer
+      loads:
+        items:
+          $ref: '#/definitions/ds.LoadInSessionDTO'
+        type: array
+      moderator_id:
+        type: integer
+      room_type:
+        type: string
+      status:
+        type: integer
+      total_load:
+        type: number
+    type: object
+  ds.LoadSessionResolveRequest:
+    properties:
+      action:
+        type: string
+    required:
+    - action
+    type: object
+  ds.LoadSessionUpdateRequest:
+    properties:
+      room_type:
+        type: string
+    type: object
+  ds.LoadToCalculationUpdateRequest:
+    properties:
+      area:
+        type: integer
+    type: object
+  ds.LoadUpdateRequest:
+    properties:
+      load_category:
+        type: string
+      load_description:
+        type: string
+      load_title:
+        type: string
+      normative:
+        type: number
+      reliability_coefficient:
+        type: number
+    type: object
+  ds.LoginResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/ds.UserDTO'
+    type: object
+  ds.PaginatedResponse:
+    properties:
+      items: {}
+      total:
+        type: integer
+    type: object
+  ds.SuccessResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  ds.UserDTO:
+    properties:
+      full_name:
+        type: string
+      id:
+        type: integer
+      moderator:
+        type: boolean
+      username:
+        type: string
+    type: object
+  ds.UserLoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  ds.UserRegisterRequest:
+    properties:
+      full_name:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - full_name
+    - password
+    - username
+    type: object
+  ds.UserUpdateRequest:
+    properties:
+      full_name:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+  description: API-сервер для управления нагрузками и сессиями расчета в системе.
+  title: API для системы расчета нагрузок
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Получение JWT токена по логину и паролю для доступа к защищенным
+        эндпоинтам.
+      parameters:
+      - description: Учетные данные пользователя
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/ds.UserLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ds.LoginResponse'
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Неверные учетные данные
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Аутентификация пользователя (все)
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      description: Добавляет текущий JWT токен в черный список, делая его недействительным.
+        Требует авторизации.
+      responses:
+        "200":
+          description: Сообщение об успехе
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Выход из системы (авторизованный пользователь)
+      tags:
+      - auth
+  /load-sessions:
+    get:
+      description: Возвращает отфильтрованный список всех сформированных сессий (кроме
+        черновиков и удаленных). Пользователи видят только свои сессии, модераторы
+        - все.
+      parameters:
+      - description: Фильтр по статусу (draft, formed, completed, rejected)
+        in: query
+        name: status
+        type: string
+      - description: Фильтр по дате 'от' (формат YYYY-MM-DD)
+        in: query
+        name: from
+        type: string
+      - description: Фильтр по дате 'до' (формат YYYY-MM-DD)
+        in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ds.PaginatedResponse'
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Получить список сессий загрузок (авторизованный пользователь)
+      tags:
+      - load-sessions
+  /load-sessions/{id}:
+    delete:
+      description: Логически удаляет сессию (переводит в статус deleted).
+      parameters:
+      - description: ID сессии
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить сессию (авторизованный пользователь)
+      tags:
+      - load-sessions
+    get:
+      description: Возвращает полную информацию о сессии, включая привязанные нагрузки.
+      parameters:
+      - description: ID сессии
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ds.LoadSessionDTO'
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Сессия не найдена
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Получить сессию по ID (авторизованный пользователь)
+      tags:
+      - load-sessions
+    put:
+      consumes:
+      - application/json
+      description: Обновляет поля сессии, доступные пользователю (например, тип помещения).
+      parameters:
+      - description: ID сессии
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Данные для обновления
+        in: body
+        name: updateData
+        required: true
+        schema:
+          $ref: '#/definitions/ds.LoadSessionUpdateRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Обновить сессию (авторизованный пользователь)
+      tags:
+      - load-sessions
+  /load-sessions/{id}/form:
+    put:
+      description: Переводит черновик сессии в статус "сформирована". Требует авторизации.
+      parameters:
+      - description: ID сессии
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Сформировать сессию загрузок (авторизованный пользователь)
+      tags:
+      - load-sessions
+  /load-sessions/{id}/loads/{load_id}:
+    delete:
+      description: Удаляет нагрузку из сессии загрузок.
+      parameters:
+      - description: ID сессии
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID нагрузки
+        in: path
+        name: load_id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить нагрузку из сессии (авторизованный пользователь)
+      tags:
+      - load-sessions
+    put:
+      consumes:
+      - application/json
+      description: Обновляет параметры нагрузки в сессии (например, площадь).
+      parameters:
+      - description: ID сессии
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID нагрузки
+        in: path
+        name: load_id
+        required: true
+        type: integer
+      - description: Данные для обновления
+        in: body
+        name: updateData
+        required: true
+        schema:
+          $ref: '#/definitions/ds.LoadToCalculationUpdateRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Обновить параметры нагрузки в сессии (авторизованный пользователь)
+      tags:
+      - load-sessions
+  /load-sessions/{id}/resolve:
+    put:
+      consumes:
+      - application/json
+      description: 'Обрабатывает сессию модератором: завершает или отклоняет. Требует
+        прав модератора.'
+      parameters:
+      - description: ID сессии
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Действие (complete/reject)
+        in: body
+        name: action
+        required: true
+        schema:
+          $ref: '#/definitions/ds.LoadSessionResolveRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Требуются права модератора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Завершить или отклонить сессию (модератор)
+      tags:
+      - load-sessions
+  /load-sessions/cart:
+    get:
+      description: Возвращает ID черновика текущего пользователя и количество нагрузок
+        в нем.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ds.CartBadgeDTO'
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Получить информацию для иконки корзины (авторизованный пользователь)
+      tags:
+      - load-sessions
+  /load-sessions/draft/loads/{load_id}:
+    post:
+      description: Добавляет нагрузку в черновик сессии текущего пользователя. Если
+        черновика нет, создает новый.
+      parameters:
+      - description: ID нагрузки
+        in: path
+        name: load_id
+        required: true
+        type: integer
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/ds.SuccessResponse'
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Добавить нагрузку в черновик (авторизованный пользователь)
+      tags:
+      - load-sessions
+  /loads:
+    get:
+      description: Возвращает отфильтрованный список всех нагрузок. Доступно всем.
+      parameters:
+      - description: Поиск по названию
+        in: query
+        name: search
+        type: string
+      - description: Фильтр по категории
+        in: query
+        name: category
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ds.PaginatedResponse'
+      summary: Получить список нагрузок (все)
+      tags:
+      - loads
+    post:
+      consumes:
+      - application/json
+      description: Создает новую нагрузку в системе. Требует прав модератора.
+      parameters:
+      - description: Данные нагрузки
+        in: body
+        name: load
+        required: true
+        schema:
+          $ref: '#/definitions/ds.LoadCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/ds.LoadDTO'
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Требуются права модератора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Создать новую нагрузку (модератор)
+      tags:
+      - loads
+  /loads/{id}:
+    delete:
+      description: Удаляет нагрузку из системы. Требует прав модератора.
+      parameters:
+      - description: ID нагрузки
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Требуются права модератора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить нагрузку (модератор)
+      tags:
+      - loads
+    get:
+      description: Возвращает информацию о нагрузке по её ID. Доступно всем.
+      parameters:
+      - description: ID нагрузки
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ds.LoadDTO'
+        "404":
+          description: Нагрузка не найдена
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Получить нагрузку по ID (все)
+      tags:
+      - loads
+    put:
+      consumes:
+      - application/json
+      description: Обновляет данные нагрузки. Требует прав модератора.
+      parameters:
+      - description: ID нагрузки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Данные для обновления
+        in: body
+        name: load
+        required: true
+        schema:
+          $ref: '#/definitions/ds.LoadUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ds.LoadDTO'
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Требуются права модератора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Обновить нагрузку (модератор)
+      tags:
+      - loads
+  /loads/{id}/image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Загружает изображение для нагрузки. Требует прав модератора.
+      parameters:
+      - description: ID нагрузки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Изображение
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Требуются права модератора
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Загрузить изображение для нагрузки (модератор)
+      tags:
+      - loads
+  /users:
+    post:
+      consumes:
+      - application/json
+      description: Создает нового пользователя в системе. По умолчанию роль "пользователь",
+        не "модератор".
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/ds.UserRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/ds.UserDTO'
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Регистрация нового пользователя (все)
+      tags:
+      - auth
+  /users/{id}:
+    get:
+      description: Возвращает публичные данные пользователя. Требует авторизации.
+      parameters:
+      - description: ID пользователя
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ds.UserDTO'
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Пользователь не найден
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Получение данных пользователя по ID (авторизованный пользователь)
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Обновляет имя пользователя или пароль. Требует авторизации.
+      parameters:
+      - description: ID пользователя
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Данные для обновления
+        in: body
+        name: updateData
+        required: true
+        schema:
+          $ref: '#/definitions/ds.UserUpdateRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Ошибка валидации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Необходима авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Внутренняя ошибка сервера
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Обновление данных пользователя (авторизованный пользователь)
+      tags:
+      - users
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
