@@ -44,7 +44,7 @@ func (r *Repository) GetLoadByID(id uint) (*ds.Loads, error) {
 	return &load, nil
 }
 
-func (r *Repository) GetLoadsFiltered(search, category string) ([]ds.Loads, error) {
+func (r *Repository) GetLoadsFiltered(search, category string, minNormative, maxNormative *float64) ([]ds.Loads, error) {
 	var loads []ds.Loads
 	query := r.db
 
@@ -53,6 +53,12 @@ func (r *Repository) GetLoadsFiltered(search, category string) ([]ds.Loads, erro
 	}
 	if category != "" {
 		query = query.Where("load_category = ?", category)
+	}
+	if minNormative != nil {
+		query = query.Where("normative >= ?", *minNormative)
+	}
+	if maxNormative != nil {
+		query = query.Where("normative <= ?", *maxNormative)
 	}
 
 	err := query.Find(&loads).Error
