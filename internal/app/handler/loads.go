@@ -14,14 +14,12 @@ import (
 // @Tags         loads
 // @Produce      json
 // @Param        search query string false "Поиск по названию"
-// @Param        category query string false "Фильтр по категории"
 // @Param        min_normative query number false "Минимальное нормативное значение"
 // @Param        max_normative query number false "Максимальное нормативное значение"
 // @Success      200 {object} ds.PaginatedResponse
 // @Router       /loads [get]
 func (h *Handler) GetLoads(c *gin.Context) {
 	search := c.Query("search")
-	category := c.Query("category")
 
 	var minNormative, maxNormative *float64
 	if minNormStr := c.Query("min_normative"); minNormStr != "" {
@@ -35,7 +33,7 @@ func (h *Handler) GetLoads(c *gin.Context) {
 		}
 	}
 
-	loads, err := h.Repository.GetLoadsFiltered(search, category, minNormative, maxNormative)
+	loads, err := h.Repository.GetLoadsFiltered(search, minNormative, maxNormative)
 	if err != nil {
 		h.errorHandler(c, http.StatusInternalServerError, err)
 		return
