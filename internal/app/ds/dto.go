@@ -65,8 +65,8 @@ type LoadToCalculationUpdateRequest struct {
 }
 
 type CartBadgeDTO struct {
-	LoadSessionID *uint `json:"load_session_id"`
-	LoadsCount    int   `json:"loads_count"`
+	LoadSessionID int `json:"load_session_id"`
+	LoadsCount    int `json:"loads_count"`
 }
 
 type UserDTO struct {

@@ -9,25 +9,27 @@ import (
 )
 
 // GetCartBadge godoc
-// @Summary      Получить информацию для иконки корзины (авторизованный пользователь)
-// @Description  Возвращает ID черновика текущего пользователя и количество нагрузок в нем.
+// @Summary      Получить информацию для иконки корзины
+// @Description  Возвращает ID черновика текущего пользователя и количество нагрузок в нем. Для неавторизованных пользователей возвращает 0.
 // @Tags         load-sessions
 // @Produce      json
-// @Security     ApiKeyAuth
 // @Success      200 {object} ds.CartBadgeDTO
-// @Failure      401 {object} map[string]string "Необходима авторизация"
 // @Router       /load-sessions/cart [get]
 func (h *Handler) GetCartBadge(c *gin.Context) {
-	userID, err := getUserIDFromContext(c)
-	if err != nil {
-		h.errorHandler(c, http.StatusUnauthorized, err)
+	userID, ok := getUserIDFromContextOptional(c)
+	if !ok {
+		// Если пользователь не авторизован, возвращаем -1 для ID сессии и 0 для количества
+		c.JSON(http.StatusOK, ds.CartBadgeDTO{
+			LoadSessionID: -1,
+			LoadsCount:    0,
+		})
 		return
 	}
 
 	draft, err := h.Repository.GetDraftLoadSession(userID)
 	if err != nil {
 		c.JSON(http.StatusOK, ds.CartBadgeDTO{
-			LoadSessionID: nil,
+			LoadSessionID: -1,
 			LoadsCount:    0,
 		})
 		return
@@ -36,14 +38,14 @@ func (h *Handler) GetCartBadge(c *gin.Context) {
 	fullSession, err := h.Repository.GetLoadSessionWithLoads(draft.ID)
 	if err != nil {
 		c.JSON(http.StatusOK, ds.CartBadgeDTO{
-			LoadSessionID: nil,
+			LoadSessionID: -1,
 			LoadsCount:    0,
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, ds.CartBadgeDTO{
-		LoadSessionID: &fullSession.ID,
+		LoadSessionID: int(fullSession.ID),
 		LoadsCount:    len(fullSession.LoadsLink),
 	})
 }

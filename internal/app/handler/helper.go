@@ -35,3 +35,18 @@ func isUserModerator(c *gin.Context) bool {
 
 	return isModerator
 }
+
+// Опциональное получение ID пользователя (без ошибки, если не авторизован)
+func getUserIDFromContextOptional(c *gin.Context) (uint, bool) {
+	value, exists := c.Get(userCtx)
+	if !exists {
+		return 0, false
+	}
+
+	userID, ok := value.(uint)
+	if !ok {
+		return 0, false
+	}
+
+	return userID, true
+}

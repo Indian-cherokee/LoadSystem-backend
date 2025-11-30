@@ -44,18 +44,12 @@ func (r *Repository) GetLoadByID(id uint) (*ds.Loads, error) {
 	return &load, nil
 }
 
-func (r *Repository) GetLoadsFiltered(search string, minNormative, maxNormative *float64) ([]ds.Loads, error) {
+func (r *Repository) GetLoadsFiltered(search string) ([]ds.Loads, error) {
 	var loads []ds.Loads
 	query := r.db
 
 	if search != "" {
 		query = query.Where("load_title ILIKE ?", "%"+search+"%")
-	}
-	if minNormative != nil {
-		query = query.Where("normative >= ?", *minNormative)
-	}
-	if maxNormative != nil {
-		query = query.Where("normative <= ?", *maxNormative)
 	}
 
 	err := query.Find(&loads).Error

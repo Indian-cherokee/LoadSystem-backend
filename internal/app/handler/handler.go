@@ -31,6 +31,13 @@ func (h *Handler) RegisterAPI(r *gin.RouterGroup) {
 	r.GET("/loads", h.GetLoads)
 	r.GET("/loads/:id", h.GetLoadByID)
 
+	// Эндпоинты с опциональной авторизацией
+	optionalAuth := r.Group("/")
+	optionalAuth.Use(h.OptionalAuthMiddleware)
+	{
+		optionalAuth.GET("/load-sessions/cart", h.GetCartBadge)
+	}
+
 	// Эндпоинты, доступные только авторизованным пользователям
 	auth := r.Group("/")
 	auth.Use(h.AuthMiddleware)
@@ -41,7 +48,6 @@ func (h *Handler) RegisterAPI(r *gin.RouterGroup) {
 		auth.PUT("/users/:id", h.UpdateUserData)
 		// Сессии загрузок
 		auth.POST("/load-sessions/draft/loads/:load_id", h.AddLoadToDraft)
-		auth.GET("/load-sessions/cart", h.GetCartBadge)
 		auth.GET("/load-sessions", h.GetLoadSessions)
 		auth.GET("/load-sessions/:id", h.GetLoadSession)
 		auth.PUT("/load-sessions/:id", h.UpdateLoadSession)

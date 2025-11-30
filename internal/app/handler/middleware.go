@@ -82,3 +82,52 @@ func (h *Handler) ModeratorMiddleware(c *gin.Context) {
 	}
 	c.Next()
 }
+
+// OptionalAuthMiddleware - опциональная проверка авторизации (не прерывает выполнение, если токена нет)
+func (h *Handler) OptionalAuthMiddleware(c *gin.Context) {
+	var tokenStr string
+
+	// Сначала пробуем получить токен из Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" && strings.HasPrefix(authHeader, jwtPrefix) {
+		tokenStr = authHeader[len(jwtPrefix):]
+	} else {
+		// Если нет в header, пробуем получить из Cookie
+		cookieToken, err := c.Cookie("token")
+		if err == nil && cookieToken != "" {
+			tokenStr = cookieToken
+		}
+	}
+
+	// Если токена нет, просто продолжаем без установки контекста
+	if tokenStr == "" {
+		c.Next()
+		return
+	}
+
+	// Проверка в черном списке Redis
+	err := h.Redis.CheckJWTInBlacklist(c.Request.Context(), tokenStr)
+	if err == nil { // Ошибки нет -> токен найден в списке -> не авторизуем
+		c.Next()
+		return
+	}
+	if !errors.Is(err, redis.Nil) { // Если ошибка не "не найдено", а что-то другое
+		// Игнорируем ошибку Redis и продолжаем
+		c.Next()
+		return
+	}
+
+	// Парсинг токена
+	claims := &ds.JWTClaims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(h.JWTConfig.Secret), nil
+	})
+
+	// Если токен валидный, устанавливаем контекст
+	if err == nil && token.Valid {
+		c.Set(userCtx, claims.UserID)
+		c.Set(moderatorCtx, claims.IsModerator)
+	}
+
+	c.Next()
+}
