@@ -30,14 +30,16 @@ type LoadUpdateRequest struct {
 }
 
 type LoadSessionDTO struct {
-	ID          uint               `json:"id"`
-	Status      int                `json:"status"`
-	CreatedAt   time.Time          `json:"created_at"`
-	CreatorID   uint               `json:"creator_id"`
-	ModeratorID *uint              `json:"moderator_id"`
-	RoomType    *string            `json:"room_type"`
-	TotalLoad   *float64           `json:"total_load"`
-	Loads       []LoadInSessionDTO `json:"loads,omitempty"`
+	ID             uint               `json:"id"`
+	Status         int                `json:"status"`
+	CreationDate   time.Time          `json:"creation_date"`
+	CreatorID      uint               `json:"creator_id"`
+	RoomType       *string            `json:"room_type"`
+	ModeratorID    *uint              `json:"moderator_id"`
+	FormingDate    *time.Time         `json:"forming_date"`
+	CompletionDate *time.Time         `json:"completion_date"`
+	TotalLoad      *float64           `json:"total_load"`
+	Loads          []LoadInSessionDTO `json:"loads,omitempty"`
 }
 
 type LoadInSessionDTO struct {

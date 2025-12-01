@@ -59,7 +59,20 @@ func (r *Repository) LogicallyDeleteLoadSession(load_sessionID uint) error {
 
 func (r *Repository) GetLoadSessionsFiltered(userID uint, isModerator bool, status, from, to string) ([]ds.LoadSession, error) {
 	var sessions []ds.LoadSession
-	query := r.db.Where("status != ? AND status != ?", ds.StatusDeleted, ds.StatusDraft)
+	// Исключаем только удаленные по умолчанию
+	query := r.db.Where("status != ?", ds.StatusDeleted)
+
+	// Черновики показываем только если они были явно сохранены (room_type IS NOT NULL)
+	// Или если запрашиваются явно через фильтр status=draft
+	if status == "draft" {
+		// При явном запросе черновиков показываем все, включая несохраненные
+	} else {
+		// Для всех остальных случаев (включая "все статусы" когда status == "")
+		// Исключаем черновики, которые еще не были сохранены (room_type IS NULL)
+		// Это означает, что пользователь еще не нажал "Сохранить заявку"
+		// При "все статусы" будут показаны только сохраненные черновики (room_type IS NOT NULL)
+		query = query.Where("NOT (status = ? AND (room_type IS NULL OR room_type = ''))", ds.StatusDraft)
+	}
 
 	if !isModerator {
 		query = query.Where("creator_id = ?", userID)
@@ -83,12 +96,12 @@ func (r *Repository) GetLoadSessionsFiltered(userID uint, isModerator bool, stat
 	}
 	if from != "" {
 		if fromTime, err := time.Parse("2006-01-02", from); err == nil {
-			query = query.Where("created_at >= ?", fromTime)
+			query = query.Where("creation_date >= ?", fromTime)
 		}
 	}
 	if to != "" {
 		if toTime, err := time.Parse("2006-01-02", to); err == nil {
-			query = query.Where("created_at <= ?", toTime)
+			query = query.Where("creation_date <= ?", toTime)
 		}
 	}
 

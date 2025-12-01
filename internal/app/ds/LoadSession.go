@@ -5,10 +5,10 @@ import "time"
 type LoadSession struct {
 	ID             uint       `gorm:"primaryKey;column:id"`
 	Status         int        `gorm:"column:status;not null"`
-	CreatedAt      time.Time  `gorm:"column:created_at;not null"`
+	CreationDate   time.Time  `gorm:"column:creation_date;not null"`
 	CreatorID      uint       `gorm:"column:creator_id;not null"`
-	ModeratorID    *uint      `gorm:"column:moderator_id"`
 	RoomType       *string    `gorm:"column:room_type"`
+	ModeratorID    *uint      `gorm:"column:moderator_id"`
 	FormingDate    *time.Time `gorm:"column:forming_date"`
 	CompletionDate *time.Time `gorm:"column:completion_date"`
 

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 	"web/internal/app/ds"
 
 	"github.com/minio/minio-go/v7"
@@ -187,8 +188,9 @@ func (r *Repository) AddLoadToDraft(userID, loadID uint) error {
 	if err != nil {
 
 		newDraft := ds.LoadSession{
-			CreatorID: userID,
-			Status:    ds.StatusDraft,
+			CreatorID:    userID,
+			Status:       ds.StatusDraft,
+			CreationDate: time.Now(),
 		}
 		if err := r.CreateLoadSession(&newDraft); err != nil {
 			return err

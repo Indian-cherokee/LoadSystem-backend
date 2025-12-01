@@ -83,13 +83,15 @@ func (h *Handler) GetLoadSessions(c *gin.Context) {
 	var sessionDTOs []ds.LoadSessionDTO
 	for _, session := range sessions {
 		sessionDTO := ds.LoadSessionDTO{
-			ID:          session.ID,
-			Status:      session.Status,
-			CreatedAt:   session.CreatedAt,
-			CreatorID:   session.CreatorID,
-			ModeratorID: nil,
-			RoomType:    session.RoomType,
-			TotalLoad:   nil, // По умолчанию null, если не рассчитано
+			ID:            session.ID,
+			Status:        session.Status,
+			CreationDate:   session.CreationDate,
+			CreatorID:     session.CreatorID,
+			RoomType:      session.RoomType,
+			ModeratorID:   nil,
+			FormingDate:   session.FormingDate,
+			CompletionDate: session.CompletionDate,
+			TotalLoad:     nil, // По умолчанию null, если не рассчитано
 		}
 
 		if session.ModeratorID != nil {
@@ -150,14 +152,16 @@ func (h *Handler) GetLoadSession(c *gin.Context) {
 	}
 
 	sessionDTO := ds.LoadSessionDTO{
-		ID:          session.ID,
-		Status:      session.Status,
-		CreatedAt:   session.CreatedAt,
-		CreatorID:   session.CreatorID,
-		ModeratorID: session.ModeratorID,
-		RoomType:    session.RoomType,
-		Loads:       loads,
-		TotalLoad:   nil, // По умолчанию null, если не рассчитано
+		ID:             session.ID,
+		Status:         session.Status,
+		CreationDate:   session.CreationDate,
+		CreatorID:      session.CreatorID,
+		RoomType:       session.RoomType,
+		ModeratorID:    session.ModeratorID,
+		FormingDate:    session.FormingDate,
+		CompletionDate: session.CompletionDate,
+		Loads:          loads,
+		TotalLoad:      nil, // По умолчанию null, если не рассчитано
 	}
 
 	if session.Status == ds.StatusCompleted {
