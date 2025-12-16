@@ -11,6 +11,7 @@ type LoadSession struct {
 	ModeratorID    *uint      `gorm:"column:moderator_id"`
 	FormingDate    *time.Time `gorm:"column:forming_date"`
 	CompletionDate *time.Time `gorm:"column:completion_date"`
+	TotalLoad      *float64   `gorm:"column:total_load"`
 
 	Creator   Users               `gorm:"foreignKey:CreatorID"`
 	Moderator *Users              `gorm:"foreignKey:ModeratorID"`

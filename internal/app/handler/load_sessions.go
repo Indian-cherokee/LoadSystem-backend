@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"web/internal/app/ds"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 // GetCartBadge godoc
@@ -83,27 +86,19 @@ func (h *Handler) GetLoadSessions(c *gin.Context) {
 	var sessionDTOs []ds.LoadSessionDTO
 	for _, session := range sessions {
 		sessionDTO := ds.LoadSessionDTO{
-			ID:            session.ID,
-			Status:        session.Status,
+			ID:             session.ID,
+			Status:         session.Status,
 			CreationDate:   session.CreationDate,
-			CreatorID:     session.CreatorID,
-			RoomType:      session.RoomType,
-			ModeratorID:   nil,
-			FormingDate:   session.FormingDate,
+			CreatorID:      session.CreatorID,
+			RoomType:       session.RoomType,
+			ModeratorID:    nil,
+			FormingDate:    session.FormingDate,
 			CompletionDate: session.CompletionDate,
-			TotalLoad:     nil, // По умолчанию null, если не рассчитано
+			TotalLoad:      session.TotalLoad, // Используем значение из БД, если есть
 		}
 
 		if session.ModeratorID != nil {
 			sessionDTO.ModeratorID = session.ModeratorID
-		}
-
-		// Если сессия завершена, рассчитываем total_load
-		if session.Status == ds.StatusCompleted {
-			totalLoad, err := h.Repository.CalculateTotalLoad(session.ID)
-			if err == nil {
-				sessionDTO.TotalLoad = &totalLoad
-			}
 		}
 
 		sessionDTOs = append(sessionDTOs, sessionDTO)
@@ -161,15 +156,7 @@ func (h *Handler) GetLoadSession(c *gin.Context) {
 		FormingDate:    session.FormingDate,
 		CompletionDate: session.CompletionDate,
 		Loads:          loads,
-		TotalLoad:      nil, // По умолчанию null, если не рассчитано
-	}
-
-	if session.Status == ds.StatusCompleted {
-		totalLoad, err := h.Repository.CalculateTotalLoad(session.ID)
-		if err == nil {
-			sessionDTO.TotalLoad = &totalLoad
-		}
-		// Если ошибка при расчете, остается nil
+		TotalLoad:      session.TotalLoad, // Используем значение из БД (рассчитывается асинхронным сервисом)
 	}
 
 	c.JSON(http.StatusOK, sessionDTO)
@@ -280,9 +267,74 @@ func (h *Handler) ResolveLoadSession(c *gin.Context) {
 		return
 	}
 
+	// Если сессия завершена, вызываем асинхронный сервис для расчета total_load
+	if req.Action == "complete" {
+		go h.callAsyncService(uint(id))
+	}
+
 	c.JSON(http.StatusNoContent, ds.SuccessResponse{
 		Message: "Сессия обработана модератором",
 	})
+}
+
+// callAsyncService вызывает асинхронный Django сервис для расчета total_load
+func (h *Handler) callAsyncService(sessionID uint) {
+	session, err := h.Repository.GetLoadSessionWithLoads(sessionID)
+	if err != nil {
+		logrus.Errorf("Failed to get session %d for async calculation: %v", sessionID, err)
+		return
+	}
+
+	// Формируем данные для асинхронного сервиса
+	loadsData := make([]map[string]interface{}, 0)
+	for _, link := range session.LoadsLink {
+		if link.Area == nil || *link.Area <= 0 {
+			continue
+		}
+		loadData := map[string]interface{}{
+			"area":                    *link.Area,
+			"normative":               link.Load.Normative,
+			"reliability_coefficient": link.Load.ReliabilityCoefficient,
+			"load_category":           link.Load.LoadCategory,
+		}
+		loadsData = append(loadsData, loadData)
+	}
+
+	requestData := map[string]interface{}{
+		"id":    sessionID,
+		"loads": loadsData,
+	}
+
+	jsonData, err := json.Marshal(requestData)
+	if err != nil {
+		logrus.Errorf("Failed to marshal request data for session %d: %v", sessionID, err)
+		return
+	}
+
+	// URL асинхронного Django сервиса
+	asyncServiceURL := "http://localhost:8000/api/calculate/"
+	req, err := http.NewRequest("POST", asyncServiceURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		logrus.Errorf("Failed to create request to async service for session %d: %v", sessionID, err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logrus.Errorf("Failed to call async service for session %d: %v", sessionID, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logrus.Errorf("Async service returned error status %d for session %d", resp.StatusCode, sessionID)
+		return
+	}
+
+	logrus.Infof("Async calculation started for session %d", sessionID)
 }
 
 // DeleteLoadSession godoc
@@ -389,5 +441,44 @@ func (h *Handler) UpdateLoadToCalculation(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, ds.SuccessResponse{
 		Message: "Площадь нагрузки обновлена",
+	})
+}
+
+// UpdateLoadSessionTotalLoad godoc
+// @Summary      Обновить total_load для сессии (внутренний endpoint)
+// @Description  Принимает результат расчета от асинхронного сервиса и обновляет total_load в сессии. Требует токен авторизации.
+// @Tags         load-sessions
+// @Accept       json
+// @Param        updateData body ds.LoadSessionTotalLoadUpdateRequest true "Данные для обновления"
+// @Success      204 "No Content"
+// @Failure      400 {object} map[string]string "Ошибка валидации"
+// @Failure      401 {object} map[string]string "Неверный токен авторизации"
+// @Router       /internal/loads/updating [put]
+func (h *Handler) UpdateLoadSessionTotalLoad(c *gin.Context) {
+	// Проверка токена авторизации
+	authToken := c.GetHeader("Authorization")
+	const expectedToken = "loadsys12" // Псевдо-токен на 8 байт
+
+	if authToken != expectedToken {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status":      "error",
+			"description": "Invalid authorization token",
+		})
+		return
+	}
+
+	var req ds.LoadSessionTotalLoadUpdateRequest
+	if err := c.BindJSON(&req); err != nil {
+		h.errorHandler(c, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := h.Repository.UpdateLoadSessionTotalLoad(req.ID, req.TotalLoad); err != nil {
+		h.errorHandler(c, http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusNoContent, ds.SuccessResponse{
+		Message: "Total load updated",
 	})
 }

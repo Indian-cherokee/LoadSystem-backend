@@ -2,7 +2,6 @@ package repository
 
 import (
 	"errors"
-	"fmt"
 	"time"
 	"web/internal/app/ds"
 )
@@ -155,15 +154,7 @@ func (r *Repository) ResolveLoadSession(id, moderatorID uint, action string) err
 	switch action {
 	case "complete":
 		updates["status"] = ds.StatusCompleted
-
-		// Рассчитываем общую нагрузку при завершении
-		totalLoad, err := r.CalculateTotalLoad(id)
-		if err != nil {
-			return fmt.Errorf("ошибка расчета нагрузки: %w", err)
-		}
-
-		// Сохраняем результат расчета (можно добавить поле в БД или логировать)
-		fmt.Printf("Сессия %d завершена. Общая нагрузка: %.2f кг\n", id, totalLoad)
+		// total_load будет рассчитан асинхронным сервисом и обновлен позже
 
 	case "reject":
 		updates["status"] = ds.StatusRejected
@@ -182,41 +173,7 @@ func (r *Repository) UpdateLoadToCalculation(sessionID, loadID uint, updateData 
 	return r.db.Model(&ds.LoadToCalculation{}).Where("load_session_id = ? AND load_id = ?", sessionID, loadID).Updates(updateData).Error
 }
 
-func (r *Repository) CalculateTotalLoad(sessionID uint) (float64, error) {
-	var session ds.LoadSession
-	err := r.db.Preload("LoadsLink").Preload("LoadsLink.Load").First(&session, sessionID).Error
-	if err != nil {
-		return 0, err
-	}
-
-	const psi = 0.7 // коэффициент сочетания временных нагрузок
-
-	var totalLoad float64
-	var permanentLoadsSum float64
-	var temporaryLoadsSum float64
-
-	for _, link := range session.LoadsLink {
-		if link.Area == nil || *link.Area <= 0 {
-			continue // пропускаем нагрузки без площади
-		}
-
-		area := float64(*link.Area)
-		normative := link.Load.Normative
-		reliabilityCoeff := link.Load.ReliabilityCoefficient
-		category := link.Load.LoadCategory
-
-		loadValue := normative * reliabilityCoeff * area
-
-		switch category {
-		case "Постоянная":
-			permanentLoadsSum += loadValue
-		case "Временная":
-			temporaryLoadsSum += loadValue
-		}
-	}
-
-	// Формула: Qtotal = Σпост + ψ * Σврем
-	totalLoad = permanentLoadsSum + psi*temporaryLoadsSum
-
-	return totalLoad, nil
+// UpdateLoadSessionTotalLoad обновляет поле total_load для сессии
+func (r *Repository) UpdateLoadSessionTotalLoad(sessionID uint, totalLoad float64) error {
+	return r.db.Model(&ds.LoadSession{}).Where("id = ?", sessionID).Update("total_load", totalLoad).Error
 }

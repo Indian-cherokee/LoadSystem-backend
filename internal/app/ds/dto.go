@@ -66,6 +66,11 @@ type LoadToCalculationUpdateRequest struct {
 	Area *int `json:"area"`
 }
 
+type LoadSessionTotalLoadUpdateRequest struct {
+	ID        uint    `json:"id" binding:"required"`
+	TotalLoad float64 `json:"total_load" binding:"required"`
+}
+
 type CartBadgeDTO struct {
 	LoadSessionID int `json:"load_session_id"`
 	LoadsCount    int `json:"loads_count"`

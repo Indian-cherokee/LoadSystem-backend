@@ -70,6 +70,12 @@ func (h *Handler) RegisterAPI(r *gin.RouterGroup) {
 		// Управление сессиями (завершение/отклонение)
 		moderator.PUT("/load-sessions/:id/resolve", h.ResolveLoadSession)
 	}
+
+	// Внутренний endpoint для приема результатов от асинхронного сервиса
+	internal := r.Group("/internal")
+	{
+		internal.PUT("/loads/updating", h.UpdateLoadSessionTotalLoad)
+	}
 }
 
 func (h *Handler) errorHandler(ctx *gin.Context, errorStatusCode int, err error) {
