@@ -312,7 +312,7 @@ func (h *Handler) callAsyncService(sessionID uint) {
 	}
 
 	// URL асинхронного Django сервиса
-	asyncServiceURL := "http://localhost:8000/api/calculate/"
+	asyncServiceURL := "http://localhost:8000/api/calculate_total_load/"
 	req, err := http.NewRequest("POST", asyncServiceURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		logrus.Errorf("Failed to create request to async service for session %d: %v", sessionID, err)
@@ -453,7 +453,7 @@ func (h *Handler) UpdateLoadToCalculation(c *gin.Context) {
 // @Success      204 "No Content"
 // @Failure      400 {object} map[string]string "Ошибка валидации"
 // @Failure      401 {object} map[string]string "Неверный токен авторизации"
-// @Router       /internal/loads/updating [put]
+// @Router       /total_loads/updating [put]
 func (h *Handler) UpdateLoadSessionTotalLoad(c *gin.Context) {
 	// Проверка токена авторизации
 	authToken := c.GetHeader("Authorization")

@@ -1,0 +1,1593 @@
+arXiv:2503.09418v1 [cs.LG] 12 Mar 2025
+EFFICIENT DYNAMIC MODAL LOAD RECONSTRUCTION USING
+PHYSICS-INFORMED GAUSSIAN PROCESSES BASED ON
+FREQUENCY-SPARSE FOURIER BASIS FUNCTIONS
+Gledson Rodrigo Tondo⋆
+Bauhaus-Universität Weimar
+Weimar, Germany
+Igor Kavrakov
+University of Cambridge
+Cambridge, United Kingdom
+Guido Morgenthal
+Bauhaus-Universität Weimar
+Weimar, Germany
+Corresponding author
+gledson.rodrigo.tondo@uni-weimar.de
+ABSTRACT
+Knowledge of the force time history of a structure is essential to assess its behaviour, ensure safety and maintain
+reliability. However, direct measurement of external forces is often challenging due to sensor limitations,
+unknown force characteristics, or inaccessible load points. This paper presents an efficient dynamic load
+reconstruction method using physics-informed Gaussian processes (GP) based on frequency-sparse Fourier
+basis functions. The GP’s covariance matrices are built using the description of the system dynamics, and
+the model is trained using structural response measurements. This provides support and interpretability to the
+machine learning model, in contrast to purely data-driven methods. In addition, the model filters out irrelevant
+components in the Fourier basis function by leveraging the sparsity of structural responses in the frequency
+domain, thereby reducing computational complexity during optimization. The trained model for structural
+responses is then integrated with the differential equation for a harmonic oscillator, creating a probabilistic
+dynamic load model that predicts load patterns without requiring force data during training. The model’s
+effectiveness is validated through two case studies: a numerical model of a wind-excited 76-story building and an
+experiment using a physical scale model of the Lillebælt Bridge in Denmark, excited by a servo motor. For both
+cases, validation of the reconstructed forces is provided using comparison metrics for several signal properties.
+The developed model holds potential for applications in structural health monitoring, damage prognosis, and
+load model validation.
+1 Introduction
+Reconstructing the time history of forces that a structure has been subjected to is essential for various engineering applications,
+including structural health monitoring, condition assessment, damage prognosis and load model validation. Direct measurement of
+external forces is often limited or impractical due to sensor constraints, the unknown nature of the forces, or the inaccessibility of
+load points for placing transducers. Consequently, indirect force reconstruction methods are commonly employed, relying on
+measurement data from the structural responses to applied dynamic loads.
+Previous efforts to reconstruct dynamic forces from structural responses are well-documented in the literature, with various
+strategies employed to recover the applied loads [1, 2]. One common approach involves the use of analytical spatial expressions
+for reconstructing loads on relatively simple structural systems, such as Euler-Bernoulli beams, thin plates, and cylindrical
+shells [3, 4, 5]. This method is akin to truncated singular value decomposition and its related techniques [6, 7, 8], where the
+structural responses are projected onto a reduced set of spatial modes. Modal superposition methods represent another widely used
+strategy, where dynamic loads are reconstructed by regressing a set of modal load time histories, under the assumption of a known
+structural mode shape matrix. This matrix is typically truncated at a certain modal number to simplify the calculations [9, 10].
+The implications of such modal truncation on the accuracy of force identification have been thoroughly examined [11]. In the
+time domain, impulse response functions have also been successfully applied to dynamic load reconstruction [12, 13]. On the
+other hand, frequency domain-based methods focus on truncating the frequency content to reconstruct forces (e.g. [14, 15]). These
+methods typically operate under the premise that only a limited range of frequencies are relevant for accurate load reconstruction.
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+To address the inherent ill-posed nature of the force reconstruction problem, many approaches employ regularization techniques.
+Commonly used regularization methods include LASSO regression [16, 17, 18] and Tikhonov regularization [12, 19, 20, 21, 22].
+More advanced regularization techniques have also been developed, leveraging prior knowledge about the spatio-temporal
+characteristics of the applied loads or employing Bayesian regularization through maximum a posteriori estimation [23, 24].
+Furthermore, extended Kalman filters have been employed as an alternative technique for dynamic load reconstruction, providing
+a recursive estimation framework capable of handling non-linearities and uncertainties inherent in the system [25, 26, 27]. In
+recent developments, machine learning methods have emerged as a significant tool in force reconstruction tasks, with a focus on
+artificial neural networks [28, 29] and Gaussian process latent force models [30, 31, 32], the latter of which combines the flexibility
+of Gaussian processes with the physical interpretability similar to state space models. Additionally, physics-informed machine
+learning models have been introduced, which integrate physical laws and domain knowledge into the learning process, thereby
+ensuring that predictions remain consistent with and leverage knowledge of the governing principles of structural dynamics. These
+models have demonstrated enhanced accuracy and robustness, particularly in situations characterized by sparse or noisy data,
+where conventional data-driven approaches may struggle to generalize effectively [33, 34].
+This paper presents a novel, efficient dynamic load reconstruction model using physics-informed Gaussian processes (GP),
+with a hybrid formulation based both on input data and on the mathematical description of the physical process to be learned.
+The model aims to overcome poor generalisation or physically inconsistent predictions, common issues in machine learning
+methods, while providing explainable and interpretable predictions [35]. We begin by constructing a prior GP model for structural
+deflections, with the covariance matrix derived from Fourier basis functions. By exploring the sparsity in the signal’s frequency
+content, we allow for the selection of specific frequency components to be included in the basis function matrices, similar to
+frequency truncation methods. In addition, the formulation of the basis functions ground the model in the physical understanding
+of the underlying process, providing an inductive bias for learning, in contrast to purely data-driven machine learning models
+(e.g. [28, 33, 34, 29]). To extend the model’s applicability, we analytically calculate time derivatives of the basis functions, thereby
+generating additional models for other quantities such as velocities and accelerations. These functions are used to form sets
+of covariance and cross-covariance matrices, which together create a multi-output GP model that can be optimized to fit the
+measurement data effectively. A key advantage of this approach is its ability to learn from repeated sets of similar responses, such
+as when sensors of varying quality are used, and to jointly learn from heterogeneous data sources, like velocity and acceleration
+measurements, introducing further model biases to the displacement basis functions. During the optimization process, the GP
+model inherently balances model complexity with data fitting, eliminating the need for an external regularization parameter, which
+is often required in traditional force reconstruction methods. The basis functions formulation and the frequency domain sparsity
+property are leveraged during training to reduce the optimisation’s computational complexity. Once the model is trained, the basis
+functions are combined with the differential equation of the harmonic oscillator to produce a physics-informed model for the
+forces, which is then used to predict the underlying dynamic loads. This provides a model form bias to the typical GP regression
+framework. In comparison to the popular linear latent force model [30], which relies on Green’s solution for the harmonic oscillator
+to build the force covariance kernels, the method presented in this paper is build directly via the differential equation, allowing for
+frequency modulation during the training and prediction steps. Importantly, no force data is required during the training phase, as
+the model relies solely on the measurement data. This feature is particularly valuable because it allows the model to predict rare
+or extreme events, such as specific traffic scenarios or unusual wind conditions, as long as the structural system remains linear
+during the period of measurement. Therefore, the model presented herein integrates and extends multiple existing approaches for
+dynamic force reconstruction, enhancing previous machine learning-based models [30, 33], avoiding issues commonly found in
+regularization-based models [17, 12], and building upon advantages existent in frequency truncation methods [14].
+This paper is organized as follows: Sec. 2 introduces the force reconstruction problem, defines the prior Gaussian process model
+for the measurements, explains how to address computational complexity during training, and derives the model and framework
+for dynamic force predictions based on the response model. In Sec. 3, the properties of the measurement GP model are explored in
+depth, examining the effects of prior assumptions on frequency content, noise levels, and the interplay between heterogeneous
+measurements. Additionally, the impact of signal properties on load prediction quality is evaluated. Sec. 4 demonstrates the
+application of the developed model in two scenarios: a 76-story benchmark building excited by wind forces and a physically scaled
+model of the Lillebælt Bridge in Denmark, excited by a dedicated servo motor. Lastly, Sec. 5 provides a summary and conclusions
+of the study, discussing the model’s limitations and potential improvements. The implementation of the model can be found in the
+GitHub repository available at github.com/gledsonrt/PIGPDynamicModalLoadReconstruction.
+2 Physics-informed GP model
+2.1 Problem statement and model description
+The discrete dynamic responses z(t),
+˙
+z(t) and¨
+z(t) of a structure due to a dynamic applied force p(t) in the time instants tare
+described by the second order differential equation
+2
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+Measurement Data Measurement GP prior Optimisation Dynamic force GP prior
+u(t)
+˙
+u(t)
+¨
+u(t)
+u(f)
+˙
+u(f)
+¨
+u(f)
+Ψu
+Ψ˙
+u
+Ψ¨
+u
+p(u,˙
+u,¨
+u|t,f)
+argmax p(u,˙
+u,¨
+u)
+Measurement
+Σij= σ2
+s ΨiΨT
+Σuu Σu˙
+u Σu¨
+j
+u
+Σ˙
+uu Σ˙
+uu Σ˙
+u¨
+Σ¨
+uu Σ¨
+u˙
+u Σ¨
+u¨
+u
+u
+Noise
+Σn = σn,iI
+u(fr )
+˙
+u(fr )
+¨
+u(fr )
+GP Range
+Ψq = mΨ¨
+u + 2mωnΨ˙
+u + mω2
+nΨu
+p(ur ,q|t,fr ) = GP 0
+0 ,
+Σur ur Σur q
+Σqur Σqq
+Dynamic force predictive posterior
+p(q|ur ,t,fr ) = N (µq ,Σq )
+Figure 1: Schematic of the physics-informed Gaussian process model for dynamic load prediction. Using the frequency content
+of the measurement data (blue box) as inputs, a GP model for the measurements (green box, Sec. 2.2) is created using Fourier
+basis functions ψi(t,f) for i∈{u,˙
+u,¨
+u}and a Gaussian noise kernel. The measurement model is reduced and optimised (orange
+box, Sec. 2.3), by filtering out low-contributing frequency bands and identifying optimal values for the free parameters σs and
+σn,i. Further, physics-informed basis functions are created for loads (red box, Sec. 2.4), yielding a joint load-measurement model.
+Conditioning the model on the measurement data ur yields probabilistic load predictions (violet box, Sec. 2.4).
+M¨
+z+ C˙
+z+ Kz= p, (1)
+where M, Cand Kare the mass, damping and stiffness matrices, respectively. The response signals can be converted into
+their modal components by pre-multiplication with the structural eigenvector matrix Φ, such that e.g. for displacements z=Φu,
+while the same applies for velocities˙
+zand accelerations¨
+z, and the modal loads are obtained as q= ΦTp. Due to eigenvalue
+orthogonality, the modal mass, damping and stiffness matrices become diagonal and the problem reduces to a set of linearly
+independent systems, where each mode can be individually solved by
+m¨
+u+ 2mζωn
+˙
+u+ mω2
+nu= q, (2)
+where mis the oscillator’s mass, ζits damping ratio to critical and ωn its circular natural frequency.
+In practice, measurements of individual components of the global responses z,
+˙
+zand¨
+zcan be made using various sensing devices
+(c.f. Fig. 1, blue box), and modal decomposition can be done despite an incomplete mode shape matrix using a least squares
+approach. However, measuring the dynamic load pis challenging, often necessitating indirect calculation strategies, such as
+reconstructing the forcing signal from the responses.
+To address this, we first derive a Gaussian process model specifically for the measurable displacements (Fig. 1, green box).
+This model does not require a predefined mean function, and its covariance matrix is constructed using a set of Fourier basis
+functions, constructed using time tand frequency f components defined by the measurement data. Additionally, the covariance
+matrix assumes independent and identically distributed (i.i.d.) measurement noise and can distinguish it from the true response
+through further optimization of model parameters. Connections between different response types (displacements, velocities and
+accelerations) are created via analytical derivatives, providing a physics-based link between data types (Fig. 1, green box, and
+Sec. 2.2). This approach allows not only for training with - one or more - heterogeneous datasets, where different types of responses
+are measured, but also for repeated types of datasets, where groups of sensors with varying characteristics measure the same type
+of response. Optimal model parameters (Fig. 1, orange box, and Sec. 2.3) are identified via maximum likelihood optimization,
+leveraging sparsity in spectral content to filter our frequency bands not contributing to structural response and allowing for an
+efficient inversion of the covariance matrix.
+Once the GP model for measurements is created and optimised, we derive basis functions for the dynamic loads based on the
+harmonic oscillator equation, shown in Eq. (2), and construct a joint model for measurements and loads (Fig. 1, red box, and
+Sec. 2.4). This physics-informed model is then conditioned on the measurement data, providing predictions for the underlying
+loads characterized by a mean value and a confidence interval (Fig. 1, violet box, and Sec. 2.4).
+2.2 Prior model for structural responses
+We begin by creating prior models for the measurable structural responses. Taking the displacement signal u(t) as a starting point,
+a Gaussian process prior model can be created as
+3
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+u(t) ∼GP(0,kuu(t,t′)), (3)
+where kuu(t,t′) is a covariance kernel that encodes the properties of the displacement signal at time instants t and t′. The
+zero-mean assumption of the prior GP model leads to no loss of generality, as shown in Sec. 2.4.
+In the GP literature, the covariance kernel kuu is generally modelled by closed-form kernel functions, such as the squared
+exponential (SE), the rational quadratic or the Matérn family of kernels [36], (see e.g. [37, 33, 38]). Herein, the covariance matrix
+is modelled using a Gramian scheme [39], such that
+kuu(t,t′,f,f′) = ψu(t,f) ψu(t′,f′), (4)
+with ψu(t,f) being an operator that constructs sets of orthogonal basis functions that can represent the displacement signal.
+Recalling Fourier’s theory, a stationary and infinitely repeating signal can be decomposed into a series of trigonometric functions.
+We therefore model ψu as
+ψu(t,f) = [sin(2πtf),cos(2πtf)] λu(f), (5)
+where f is the oscillation frequency, and λu(f) serves as a scale for each basis function ψu(f,t). For the prior model on
+displacements, we assume λu as the magnitude of the signal’s Fourier transform, scaling both the sine and cosine components as
+λu(f) = |F[u] (f)|. (6)
+It is worth noting that the assumptions of Fourier analysis, that the sampled input signal repeats periodically and that the period
+equals the input length, also apply to the basis functions ψu(t,f) and therefore to the forcing signals reconstructed by the
+physics-informed GP model. Modal velocities and accelerations may also be represented as Gaussian processes
+˙
+u(t) ∼GP(0,
+k˙
+u˙
+u(t,t′,f,f′)), (7)
+¨
+u(t) ∼GP(0,k¨
+u¨
+u(t,t′,f,f′)), (8)
+where k˙
+u˙
+u = ψ˙
+u(t,f) ψ˙
+u(t′,f′) and k¨
+u¨
+u = ψ¨
+u(t,f) ψ¨
+u(t′,f′) are the covariance kernels for velocities and accelerations and are
+generated with specific basis functions, similarly to the displacement case (cf. Eq. (4)). They are obtained by leveraging the linear
+physical relationship between the respective quantities
+ψ˙
+u =
+ψ¨
+u =
+d
+dtψu(t,f) = 2πf[cos(2πtf),−sin(2πtf)] λu(f), (9)
+d2
+dt2 ψu(t,f) = 4π2f2 [−sin(2πtf),−cos(2πtf)] λu(f). (10)
+It is worth noting that, although we represent ψ˙
+uand ψ¨
+uas functions of ψu, and therefore of λu, they can also be generated by taking
+velocities or accelerations as initial points and applying the appropriate linear operators, following the logic in Eqs. (9) and (10).
+Creating the covariance matrices using basis functions also allows for a simple calculation of the cross-covariance between different
+physical properties, effectively modelling the correlation between heterogeneous data types and the physical interpretation of the
+time derivative into a covariance matrix. Therefore, in a generalized manner, we calculate the GP’s covariance matrices as
+kij(t,t′,f,f′) = ψi(t,f) ψj(t′,f′), (11)
+for i,j ∈{u,˙
+u,¨
+u}.
+We now assume a dataset D= {u,˙
+u,¨
+u}, which includes the structural modal displacements u, modal velocities˙
+uand modal
+accelerations¨
+u, collected simultaneously at Nt time instants twith a sampling rate of fs = 1/∆t, where ∆tis the time interval
+between measurements. Using the developed models, a block-covariance matrix Σr that represents the prior assumptions on the
+structural responses can be created such that
+Σr = ΨrΨT
+r
+=
+Ψu
+Ψ˙
+u
+u
+Ψ¨
+[Ψu,Ψ˙
+u,Ψ¨
+u] =
+Σuu Σu˙
+u Σu¨
+u
+Σ˙
+uu Σ˙
+uu Σ˙
+u¨
+Σ¨
+uu Σ¨
+u˙
+u Σ¨
+u¨
+u
+u
+, (12)
+4
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+where Ψi = ψi(t,f) for i ∈{u,˙
+u,¨
+u}, and the response basis functions matrix Ψr = [Ψu,Ψ˙
+u,Ψ¨
+u]T has size 3Nt ×2Nf
+leading to a covariance matrix Σr of size 3Nt ×3Nt.
+In addition to the structural responses modelled by Σr, we need to account for the noise content that contaminates the measurement
+dataset D. Herein, the core assumption is that the noise content is of Gaussian type and is independent and identically distributed
+(i.i.d.). Taking once again the displacements as a base case, we model the covariance matrix Σn,u of the noise content in the
+displacement data as
+Σn,u = σ2
+n,uI, (13)
+where σ2
+n,u is the variance of the noise content in the data, and Iis the identity matrix of size Nt ×Nt. Allowing for individual
+noise content quantities for velocities and accelerations and leveraging the i.i.d. assumption leads to the full noise model
+Σn = 
+σ2
+n,uI 0 0
+0 σ2
+uI 0
+
+n,˙
+0 0 σ2
+n,¨
+uI
+=
+Σn,u 0 0
+0 Σn,˙
+u 0
+0 0 Σn,¨
+u
+, (14)
+where σ2
+n,˙
+u and n,σ2
+u are the variances for the velocity and acceleration dataset noise. The noise covariance matrix has, therefore,
+¨
+the same size as the data covariance matrix, 3Nt ×3Nt.
+Combining the response and noise models and introducing a variance scale σ2
+s to control the amplitude of the response w.r.t. the
+noise yields the full covariance matrix Σ, and the physics-informed Gaussian process prior model for the measurement data takes
+the form
+1
+[u,˙
+u,¨
+u]T ∼N(0,Σ). (15)
+where Σ= σ2
+sΣr + Σn, with Σr and Σn modelled by Eqs. (12) and (14), respectively.
+2.3 Model reduction and efficient parameter optimisation
+The model derived in Sec. 2.2 contains free parameters, namely the measurement scale variance σ2
+s and the noise variances σ2
+n,u,
+σ2
+n,˙
+u and σ2
+n,¨
+u, that can be identified from the provided training data. Parameter identification in Gaussian process regression is
+generally carried out via maximum likelihood optimisation [36]:
+θopt = argmax
+θ
+log p(ur|t,f,θ) = argmax
+θ
+−
+uT
+rΣ−1ur−
+2
+1
+2logdet(Σ)−
+3Nt
+2 log2π , (16)
+where we denote the data vector by ur = [u,˙
+u,¨
+u]T, and gather the optimisable parameters in θ= {σ2
+s,σ2
+n,u,σ2
+n,˙
+u,σ2
+n,¨
+u}.
+Although fully Bayesian approaches can also be adopted to derive probability distributions for each of the parameters (cf. e.g. [40,
+41]), this will not be investigated in this work.
+The parameter optimisation procedure in Eq. (16) scales with a computational complexity of O(N3
+t) due to the matrix inversion
+operation, making it infeasible for very long or densely sampled measurements. Approaches to overcome this issue are either
+based on global approximations [42, 43, 44, 45, 46], which summarize the dataset in a small sparse selection of data points and
+thus ignores finer details in the data, or in local approximations [47, 48, 49], which generally involves training multiple models
+based on subsets of data and later combining them, often leading to discontinuous predictions and overfitting. An extensive review
+of such methods is given in [50].
+Herein, we exploit the basis functions approach for the covariance kernel creation to accelerate model training. Initially, we
+recall that the measurements of structural responses are generally sparse in the frequency domain since the system’s mechanical
+admittance acts as a filter for any broadband input excitation. As a result, the original frequency vector fwith size Nf ×1, used to
+create the basis functions matrix, can be reduced to a subset fr with size Nf,r ×1, with Nf,r ≪Nf. The selection of frequencies
+in fr can be made by filtering out regions with low spectral amplitude F[u] (f) in the measurement data. This now yields a basis
+function matrix Ψi, for i∈{u,˙
+u,¨
+u}, with size Nt ×2Nf,r, but does not change the size of the full covariance matrix Σ, and
+therefore does not yet reduce the optimisation’s computational complexity. However, re-writing the covariance matrix Σ as a
+function of the response basis functions Ψr yields
+Σ= Ψr(σ2
+sI)ΨT
+r + Σn, (17)
+5
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+which can be inverted using the Woodbury matrix identity [51] as
+Σ−1
+= Σ−1
+n−Σ−1
+n Ψr((σ2
+sI)−1 + ΨT
+rΣ−1
+n Ψr)−1ΨT
+rΣ−1
+n. (18)
+Since Σn and σ2
+sI are diagonal matrices, they can be inverted using scalar operations only. Further, because of its size, the
+inversion of ((σ2
+sI)−1 + ΨT
+rΣ−1
+n Ψr) has computational complexity of O(N3
+f,r), which is much more amenable than the naïve
+direct inversion of Σ. Therefore, filtering out irrelevant frequency components in the response signal improves training efficiency
+by reducing the size of matrices to be inverted. However, frequency filtering must be done carefully, as components outside the
+basis functions are not captured by the GP model. This means that all expected frequency components relevant to the forcing
+signal, whether or not they align with the structure’s natural frequencies, should be included in the basis functions. Additionally,
+forcing components in regions of low mechanical admittance, which do not produce significant structural responses, cannot be
+captured by the GP model. Finally, the determinant of Σ, also used in Eq. (16), can be efficiently computed using the matrix
+determinant lemma [52] by
+det(Σ) = det((σ2
+sI)−1 + ΨT
+rΣ−1
+n Ψr) det(σ2
+sI) det(Σn). (19)
+In the implementation of the likelihood optimisation, a small numerical perturbation is added to the noise covariance Σn to improve
+stability in the numerical inversion operation in Eq. 18, which is particularly important in the case of noise-less measurements,
+where σ2
+n,i →0 for i∈{u,˙
+u,¨
+u}. The matrix inversion operations are carried out using Cholesky decomposition [51, 36].
+2.4 Force prediction
+Once the prior model for the structural responses has been created and the free parameters have been optimised, an extension of
+the measurement GP can be created to represent the underlying dynamic forces. Substituting the structural modal responses in the
+oscillator equation (Eq. (2)) by their respective basis functions models ψu, ψ˙
+u and ψ¨
+u yields the basis function model for the forces
+mψ¨
+u + 2mζωnψ˙
+u + mω2
+nψu = ψq, (20)
+where m, ζand ωare the modal mass, damping ratio and natural frequency relative to each particular modal component in the
+analysis. These parameters can be estimated through system identification strategies or, if available, obtained from calibrated
+numerical models of the structure. Using the basis functions matrix Ψq = ψq(t,f) and following the logic derived in Eq. (11), the
+prior model for the measurements can be augmented to include the forcing component by
+ur
+q
+∼N 0
+0 ,
+Σ σ2
+sΨrΨT
+q
+σ2
+sΨqΨT
+r σ2
+sΨqΨT
+q
+, (21)
+where we note that the noise covariance Σn is only a part of the measurement covariance Σ, and therefore independent from the
+force model. Conditioning the force qon the measurement model and dataset ur yields the predictive posterior distribution
+p(q|ur,t,fr,θ) = N(µq,Σq), (22)
+with the dynamic force’s mean µq and covariance matrix Σq calculated by
+µq = σ2
+sΨqΨT
+rΣ−1ur, (23)
+Σq = σ2
+sΨqΨT
+q−σ4
+sΨqΨT
+rΣ−1ΨrΨT
+q. (24)
+3 Fundamental studies
+3.1 Prior covariance kernel properties
+The initial focus of this study involves examining the characteristics of the prior measurement model (see Fig. 1, green box, and
+Sec. 2.2). Herein, we investigate the effects of the frequency modulation in fr, the interplay between response amplitude and
+measurement noise, the model’s ability to represent signals with dense frequency spectrum, and the physics-informed aspect
+introduced by the time derivatives linking the displacement, velocity and acceleration models.
+6
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+0
+2
+4
+6
+8
+10
+0 2 4 6 8 10
+0 2 4 6 8 10
+0 2 4 6 8 10
+-1.0 -0.5 0.0 0.5 1.0
+3
+2
+1
+0
+-1
+-2
+-3
+0 2 4 6 8 10
+0 2 4 6 8 10
+0 2 4 6 8 10
+Figure 2: Top: covariance matrices Σuu generated with the squared exponential kernel (left), and with the basis functions model
+from Sec. 2.2 with f = 0.3 Hz (centre) and f = 0.6 Hz (right). Colours in the top plots indicate the covariance magnitudes, which
+are normalised to one. Bottom: zero-mean sample signals and 95% confidence interval for each respective covariance matrix.
+We begin by studying the Gaussian process prior model for a noise-free deflection signal, Σuu = ΨuΨT
+u. Unlike conventional
+kernel functions, such as the squared exponential (SE) kernel [36], the model derived using basis functions allows for the
+specification of the frequency content within the target signal. Figure 2 (top) shows covariance kernels with two scenarios of
+single frequency content: 0.3 Hz and 0.6 Hz, alongside the SE kernel for comparison. By construction, the SE kernel characterizes
+similarity exclusively between proximate time instances and does not account for negative correlations. In contrast, the covariance
+kernels based on basis functions capture this relationship, gradually deteriorating in amplitude for time steps farther apart while
+accounting for the inverse relationships governed by the frequency ffrom which they are derived. Consequently, samples generated
+using these covariance kernels (see Fig. 2, bottom) reflect these assumptions, exhibiting the anticipated frequency content, random
+phase, and varying amplitude over time.
+To account for the noise in the measurement data, a diagonal matrix of constant values σ2
+n,i for i ∈{u,˙
+u,¨
+u}is added to the
+response covariance of each dataset (c.f. e.g. Eq. (13) for the displacement case), following the Gaussian assumption. Due to this
+covariance addition, there is a relationship between the response scale parameter σs and the noise scales σ2
+n,i. To demonstrate this
+interplay, using once again displacements as examples, we define the variance ratio
+σ2
+s
+rσ =
+, (25)
+σ2
+s + σ2
+n,u
+representing the percentage of the covariance matrix that is governed by the true response. Fig. 3 illustrates three cases of
+covariance matrices (top) with different rσ values, along with samples of time series derived from each (bottom). For rσ = 1.00
+(left), the model assumes no noise, being fully governed by the response covariance, resulting in a smooth time series. When
+rσ = 0.75 (centre), the responses still predominantly govern the model’s behaviour, but Gaussian noise is evident in the sampled
+signals. In contrast, for rσ = 0.00 (right), there is no correlation between different time steps, and the samples are purely white
+noise with variance σ2
+n,u. Optimal values for σ2
+s and σ2
+n,i for all ith datasets are identified based on the training data during the
+parameter optimization step, as shown in Fig. 1, orange box, and Sec. 2.3.
+7
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+0
+2
+4
+6
+8
+10
+0 2 4 6 8 10
+0 2 4 6 8 10
+0 2 4 6 8 10
+3
+2
+1
+0
+-1
+-2
+-3
+0 2 4 6 8 10
+0 2 4 6 8 10
+0 2 4 6 8 10
+Figure 3: Influence of the ratios rσ of measurement variance to total variance in the prior model for displacements. The covariance
+matrices for the cases of rσ = 1.00 (left), rσ = 0.75 (centre) and rσ = 0.00 (right) are shown on top (colours indicate the
+covariance magnitudes, which are normalised to one, see Fig. 2), with zero-mean samples generated from each respective
+covariance at the bottom. The shaded area in the bottom plots represents the 95% confidence interval.
+0
+2
+4
+6
+8
+10
+3
+2
+1
+0
+-1
+-2
+-3
+102
+Target
+100
+10-2
+10-4
+0 2 4 6 8 10
+0 2 4 6 8 10
+10-6
+10-1 100 101
+Figure 4: Prior model’s response covariance matrix based on a multiple-frequency spectrum. The dense covariance matrix (left)
+leads to zero-mean samples containing the target frequencies (centre), as shown by their power spectral density (right). In the left
+plot, colours indicate the covariance magnitudes, which are normalised to one (see Fig. 2), and in the central plot, the shaded area
+represents the 95% confidence interval.
+As discussed in the model derivation, the basis functions are created by scaling each sine and cosine component with the amplitude
+of the training data’s Fourier transform (see Eq. (5) for the displacement case). While we have demonstrated cases with a
+single frequency component, the developed model is general and accommodates a densely populated frequency spectrum. To
+illustrate this, a synthetic target spectrum was created using three main frequency components: f1 = 0.50 Hz, f2 = 0.75 Hz and
+f3 = 1.35 Hz, each with increasing amplitudes and random phase angles. The model was then created based on this spectrum,
+assuming a noiseless scenario. The prior covariance kernel is shown in Fig. 4 (left), displaying a rich and dense structure resulting
+from the multiple high-frequency components. Samples generated from this covariance (Fig. 4, centre) also exhibit several
+governing frequencies and remain smooth in the time domain, as no noise prior was added to the covariance model. Furthermore,
+the power spectral density analysis of each sample shows a good agreement w.r.t. the target spectrum, as shown in Fig. 4 (right).
+8
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+0
+5
+10
+0
+5
+10
+0
+5
+10
+0.08
+0.04
+0.00
+-0.04
+-0.08
+0.60
+0.30
+0.00
+-0.30
+-0.60
+3.00
+1.50
+0.00
+-1.50
+-3.00
+0 5 10 0 5 10 0 5 10
+0 2 4 6 8 10
+Figure 5: Left: block-covariance matrix for a heterogeneous response case, where displacements u, velocities˙
+uand accelerations¨
+u
+are used as training data (colours indicate the covariance magnitudes, which are normalised to one, see Fig. 2). Right: Time-domain
+samples for displacements (top), velocities (centre) and accelerations (bottom) sampled from the covariance matrix. The grey
+shaded area represents the signal’s 95% confidence interval.
+We further investigate the physical relationships between displacements, velocities, and accelerations, which are incorporated into
+the covariance matrices through the direct time derivatives of the basis functions (see Eqs. (9) and (10)). Assuming a noise-free and
+single-frequency case, we generate the prior basis functions that yield the covariance and cross-covariance matrices. Ultimately, a
+full measurement covariance matrix is constructed according to Eq. (12), with its structure and schematic division between block
+covariance matrices shown in Fig. 5 (left). The cross-covariances Σu˙
+u and Σ˙
+u¨
+u have zero diagonals, consistent with the π/2
+phase angle resulting from the time derivative. The negative diagonal observed for Σu¨
+u reflects the πphase angle between the
+two responses. This property is also evident in the signals generated from the full covariance matrix (Fig. 5, right), where each
+sample for displacements, velocities, and accelerations is linked via the respective time derivatives, analytically performed while
+generating the basis functions ψu(t,f), ψ˙
+u(t,f) and ψ¨
+u(t,f).
+3.2 Force prediction accuracy of a SDOF signal
+Once the response model has been created and the optimal parameters σs and σn,i for each ith dataset have been identified, the
+force model can be constructed (see Fig. 1, red box and Eq. (20)). The joint force-measurement model can then be used to predict
+dynamic loads in the form of a mean function and covariance matrix, as shown in Eqs. (23) and (24). At this stage, a numerical
+single-degree-of-freedom (SDOF) system subjected to a harmonic load is used as a basis model to investigate various properties of
+the measurement signals and their effects on the predicted force. An example of the SDOF responses u,
+˙
+uand¨
+uused to train
+the model, along with the true and predicted loads is shown in Fig. 6. It is worth noting that, throughout this study, we assume
+normalised version of the mode shapes, with max(|Φ|) = 1, and select appropriate values for the modal mass min order to
+obtain the correct magnitude of the dynamic modal load. In what comes, a Monte Carlo (MC) analysis with N = 104 samples is
+conducted for each studied parameter, and the regressed forces are compared to the true ones using the coefficient of determination
+R2
+.
+The initial study investigates the effects of the sampling rate fs = 1/∆ton the quality of the predicted load. In this case, the
+Monte Carlo analysis is carried out for each fs, with noise added to the response signals at a signal-to-noise ratio (SNR) of 15,
+calculated e.g. for the displacement case by
+SNR = max|u|
+σn,u
+, (26)
+9
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+0.30
+0.15
+0.00
+-0.15
+-0.30
+12.0
+6.0
+0.0
+-6.0
+-12.0
+2.0
+1.0
+0.0
+-1.0
+-2.0
+1.0
+0.5
+0.0
+-0.5
+-1.0
+True
+Pred
+0 2 4 6 8 10
+0 2 4 6 8 10
+Figure 6: A sample of the force reconstruction results for a noiseless SDOF system. The model responses u,
+˙
+uand¨
+uare obtained
+numerically from the application of the true harmonic load signal. The GP model is trained using the SDOF responses, and further
+used to make predictions of the underlying load.
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+0.01 0.10 0.20 0.30 0.40 0.50
+3 5 10 20 30 40 50
+Figure 7: Coefficients of determination R2 of the reconstructed force signals for different parameters of the training data. The
+results of sampling rate (left), signal-to-noise ratio (SNR, centre) and type of input training data (right) are shown with their
+respective 95% confidence interval, according to the Monte Carlo analysis with N = 104 samples.
+where σn,u is the standard deviation of the white noise added to the true displacement response. These contaminated signals are
+used as training data. The results, shown in Fig. 7 (left) as a function of the SDOF system’s natural period of vibration T, indicate
+a substantial increase in R2 values for ∆t/T <0.30. Beyond this value, not only do the average R2 values drop below 0.95, but
+there is also a significant increase in standard deviation, as observed from the Monte Carlo analysis for each sampling frequency
+case. Furthermore, following the Shannon-Nyquist sampling theorem [53], predicting forces for cases where ∆t/T >0.50 is not
+possible since the signal to be measured cannot be accurately represented by the selected sampling rate.
+The noise present in the training data can significantly impact the quality of the predicted dynamic loads. To evaluate its effects,
+we analyze the SDOF case using a Monte Carlo approach for SNRs ranging from 3 to 50, with a constant ∆t/T = 0.10. The
+results (see Fig. 7, centre) indicate nearly perfect force reconstruction for training signals with SNR >20. For SNRs between
+10 and 20, although the mean R2 value remains above 0.95, an increase in variance is observed in the MC analysis, indicating
+potential accuracy loss for specific noise distributions within the signal. For training signals with SNR <10, there is significant
+prediction uncertainty regarding the R2 coefficient, with extreme cases showing values as low as R2 = 0.40. However, the average
+R2 value remains above 0.90 in all noise cases, demonstrating the good performance of the physics-informed GP model in force
+prediction, and guiding practical applications regarding measurement quality.
+10
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+0.4
+0.2
+0.0
+-0.2
+-0.4
+14
+7
+0
+-7
+-14
+0 2 4 6 8 10
+0 2 4 6 8 10
+1.4
+0.7
+0.0
+-0.7
+-1.4
+0 2 4 6 8 10
+102
+10-2
+10-6
+10-10
+10-14
+10-2 10-1 100 101 50
+Figure 8: Accuracy comparison between different dynamic force reconstruction methods. Top: SDOF displacements (left) and
+accelerations (right) responses due to a harmonic force, contaminated by a white noise signal with SNR= 10. Bottom: the
+reconstructed forces using the augmented Kálmán filter (AKF), impulse response function (IRF) and the proposed physics-informed
+Gaussian Process (GP) models, in time domain (left) and the corresponding power spectral density (right). For all models, only
+displacements were used as inputs.
+Lastly, we fix the SNR at 15 and the sampling frequency at ∆t/T = 0.10 to study the effects of the input data type, i.e.
+displacements, velocities, accelerations, and combinations of these, on the load prediction quality. As shown in Fig. 7 (right), all
+cases produce acceptable R2 coefficients, with the worst performance in terms of mean and variance occurring when the training
+data consists of displacement signals only. This behaviour is expected as displacement signals attenuate high-frequency content,
+causing the model to interpret forces in that spectral range as measurement noise. A similar trend is observed when training
+data includes both velocities and displacements, although the average R2 is higher and the confidence interval is much smaller.
+Nonetheless, the model can predict the dynamic load signal with any type of training input, including combinations of multiple
+heterogeneous signals.
+To further assess the performance of the physics-informed GP model, we compared its results with two established force
+reconstruction methods from the literature: the Augmented Kalman Filter (AKF) method [54] and the Impulse Response Function
+(IRF) method [12, 55]. For this comparison, we used the SDOF system response to a harmonic load with frequency f = 1 Hz,
+contaminated with white noise at an SNR of 10, as shown in Fig. 8 (displacements at top left and accelerations at top right). Since
+the IRF model uses only displacement inputs, we restricted the AKF and GP models to displacements as well, fixing ∆t/T = 0.01
+for all. In the AKF, specific noise and uncertainty assumptions were set, including an error variance of 10−1 and noise variances
+for the state, augmented force, and observation equations of 10−15
+, 10−12, and 10−11, respectively. The IRF method employs
+Tikhonov regularization with a parameter λ= 10−2. Both models are sensitive to these parameter choices, which were optimized
+using L-curve analysis [56]. In contrast, the physics-informed GP model automatically balances model complexity and data fitting
+through its likelihood formulation (Eq. (16)), eliminating the need for additional regularization. The reconstructed force time
+series are shown in Fig. 8 (bottom left), where the GP model shows the highest agreement with the true harmonic load, achieving
+an R2 of 0.996, followed by the AKF model (R2 = 0.941) and the IRF model (R2 = 0.782). This performance is also evident in
+the power spectral density of the reconstructed signals (bottom left), where all models correctly identify the harmonic content at
+f = 1 Hz, however, the GP model displays a smooth decay in frequencies away from 1 Hz, while the AKF and especially the IRF
+exhibit higher influence from other frequency content.
+4 Experiments
+The developed formulation is now applied to two case studies: a numerical simulation of a 76-story benchmark building subjected
+to ambient wind loads [57], and an experimental study involving a historical dynamically scaled model of the Lillebaelt Suspension
+Bridge, excited by a servo motor driving a rotating mass. In the first scenario, the excitation is known a priori, enabling a direct
+comparison between the force reconstruction results and the true load. In the second scenario, the force is calculated from the
+motion prescribed to the servo motor, with the reconstruction relying on measurements obtained from the scaled model’s response.
+We note that our focus is on the global system behavior rather than local element effects, that may arise from e.g. the application
+11
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+0.2
+0.1
+0.0
+-0.1
+-0.2
+0 100 200 300 400 500 600
+102
+10-2
+10-6
+10-10
+10-2 10-1 100 101
+Figure 9: Left: the floor plan schematic of the benchmark building. Right: the simulated acceleration response at H = 306 m (top)
+and the respective power spectral density (PSD, bottom). The responses are calculated numerically, using the load signals obtained
+from the wind tunnel scaled model.
+of concentrated loads. Accurately reconstructing all forces affecting system responses, although possible with the GP model,
+may require a high number of modes, particularly for local effects that often involve high-frequency modes, and tend to be more
+affected by measurement noise.
+Given the increased complexity of these examples compared to the SDOF model used in the fundamental studies, we use several
+metrics Mto compare the true and reconstructed forces [58]. Specifically, we assess global and local signals features based on root
+mean square difference Mrms, correlation Mc, coefficient of determination MR2 , wavelet coefficients MW, peak amplitudes
+Mpeak, phase angles Mϕ, and warped magnitude Mm. The advantage of these comparison metrics is that they provide a
+normalized similarity assessment, where values close to unity indicate similar signals, while values close to zero indicate dissimilar
+signals. Further details on the comparison metrics are discussed in A.
+4.1 Numerical 76-story benchmark building
+The first application of the physics-informed Gaussian Process (GP) model for load identification involves a wind-excited 76-story
+concrete office tower in Melbourne, Australia. Detailed in [57], this benchmark problem features a building with a total height of
+H = 306 m and a square cross-section with chamfered corners (see Fig. 9, left). The building is modeled as a vertical cantilever
+beam with a node at each floor, resulting in 76 translational degrees of freedom (DOF), while rotational DOFs are eliminated
+through static condensation. The wind excitation, lasting 600 seconds, is divided into static and dynamic components, with the
+latter following the Davenport spectrum [59, 57]. The wind load is obtained from wind tunnel testing conducted in the University
+of Sydney, for a rigid model of the building in a 1:400 scale, and further applied to the numerical model of the building to obtain
+the dynamic responses. Due to the geometric symmetry of the section and the alignment of the elastic and mass centres, no coupled
+lateral-torsional motion occurs. As a simplification, the benchmark considers only the along-wind component of the force. In
+addition, the benchmark problem allows for the control the building displacements using an active tuned mass damper. In our
+study, however, we use only the uncontrolled case. The acceleration response of the building’s top floor and its frequency content
+are illustrated in Fig. 9 (right). The first six normalised mode shapes and the corresponding modal mass values m, as well as the
+damping ratios ζand natural frequencies fn, are available numerically as part of the benchmark solution, as presented in Fig. 10.
+In the benchmark case, the applied force is fully known, along with the system’s mass, damping and stiffness matrices, used to
+obtain the global and modal responses of all DOFs. The known force, herein noted as qtrue, is used as a baseline for comparison
+with the forces predicted by the GP model. In this example, we first reconstruct the loads based on the first six structural modes,
+assuming full knowledge of the structural parameters and modal responses. Further, we contaminate the true responses with
+noise to simulate sensor readings, and obtain modal components by a least squares approach assuming a finite number of sensors
+installed in the structure. Our goal is to reproduce realistic measurement conditions in a controlled manner, and compare the force
+reconstruction results with the purely synthetic scenario.
+We begin by identifying the first 6 aerodynamic modal loads applied to the building model based on its noise-less response,
+considering a dataset consisting of the three modal quantities (displacements, velocities and accelerations) sampled at fs = 20 Hz.
+An example of the response for the first mode of vibration (fn = 0.160 Hz) is shown in Fig. 11 (left). As an initial step in the
+optimization process, we select relevant frequency components to build the response basis functions Ψr. Different strategies are
+possible to accomplish this, and herein we proceed by selecting frequencies whose spectral amplitudes are higher than a cutoff
+12
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+Figure 10: From left to right: first six mode shapes along the height hand the respective modal masses m, damping ratios ζand
+natural frequencies fn. The 76-story building benchmark problem in Melbourne, Australia [57] has a total height of H = 306 m.
+0.3
+0.2
+0.0
+-0.2
+-0.3
+0.3
+0.2
+0.0
+-0.2
+-0.3
+0.2
+0.1
+0.0
+-0.1
+-0.2
+0 100 200 300 400 500 600
+102
+100
+10-2
+10-4
+10-6
+102
+100
+10-2
+10-4
+10-6
+10-8
+102
+100
+10-2
+10-4
+10-6
+10-8
+10-2 10-1 100 101
+Figure 11: Left: simulated modal displacement (top), velocity (centre) and acceleration (bottom) for the benchmark building
+subjected to a wind excitation, considering mode 1 (fn = 0.160 Hz). Right: the corresponding power spectral densities. Colours
+in all plots denote frequencies that are either included in the basis functions (f ∈fr) or ignored by the GP model.
+limit, such that fr = {fi ∈f : |F[ur] (fi)|> κ}, with κbeing the sum of a mean µur
+|F[ur] (f)|,
+and two standard deviations σur
+of
+κ= µur + 2σur
+. (27)
+For the 6 studied mode shapes, this procedure eliminated on average 94.5% of the Nf frequency components contained in the
+response signals, significantly enhancing computational performance (c.f. Eq. (18)). An example of the filtered frequency content
+for the first mode shape is shown in Fig. 11 (right).
+The force reconstruction results, shown in Fig. 12, indicate a good overall agreement between the benchmark modal forces qtrue
+and the mean force predictions µq, with accuracy decreasing for higher modal numbers. The confidence interval, represented by
+the standard deviation of the predictions σq, is small compared to the mean force values for modes 1 to 4, but becomes significant
+for modes 5 and 6. This effect is a result of very low contribution to the response in higher modes, which is disregarded by the
+13
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+5.0
+2.5
+0.0
+-2.5
+-5.0
+3.0
+1.5
+0.0
+-1.5
+-3.0
+2.0
+1.0
+0.0
+-1.0
+-2.0
+4.0
+2.0
+0.0
+-2.0
+-4.0
+2.0
+1.0
+0.0
+-1.0
+-2.0
+1.0
+0.5
+0.0
+-0.5
+-1.0
+0 100 200 300 400 500 600
+0 100 200 300 400 500 600
+Figure 12: Benchmark modal force qtrue, along with mean µq and standard deviation σq of the GP predictions (not visible for
+modes 1 to 4). Load signals from left to right for modes 1 and 2 (top), 3 and 4 (centre) and 5 and 6 (bottom).
+GP as noise. To further investigate the reconstructed signal’s properties in both the time and frequency domains, we performed
+a wavelet analysis using a Morlet wavelet with a central frequency f0 = 4 Hz. Fig. 13 shows the results for all modal cases,
+comparing the true and reconstructed forces, as well as the difference between them. Although the frequency content of the true
+modal force qtrue changes over time, the physics-informed GP model accurately captures this effect, resulting in minimal errors
+for the first four modal cases. In mode 5, errors up to 15% in wavelet magnitude are observed between the true and reconstructed
+signals, scattered throughout the frequency content and analysis period. In mode 6, errors up to 40% in wavelet magnitude occur,
+especially during periods when particular frequencies are activated in the true force. Despite the large errors, the GP model
+captures the overall distribution of frequency content over time but overestimates their magnitude due to the high modal frequency
+(9.458 Hz, c.f. Fig. 10) relative to the concentrated forcing frequency content below 1 Hz.
+To summarize the quality of the predicted modal forces, Fig. 14 presents comparison metrics for each mode. As qualitatively
+observed in Fig. 12, the first four modes perform well across all metrics, with values close to unity, except for the phase metric Mϕ,
+which is approximately 0.85 in all cases. In mode 5, a reduction is observed in the root mean square Mrms, warped magnitude
+Mm, and peak Mpeak metrics, likely due to the higher modal frequency. In mode 6, significant reductions in Mrms, Mpeak,
+and Mm indicate a loss of signal magnitude throughout its duration, consistent with the behaviour observed in its reconstruction
+(Fig. 12, bottom right). The wavelet metric MW, while amounting to 0.82, is relatively high, indicating that the wavelet values,
+despite being incorrect in magnitude, align with the true force in time and frequency locations, as seen in Fig. 13. Interestingly, the
+Mϕ and Mc metrics remain relatively high for mode 6, indicating better performance of the model regarding phase angle and
+correlation retention.
+In real scenarios, structural responses can only be measured at discrete locations, and the collected datasets often contain significant
+noise. To simulate these effects, we add a white noise signal with an SNR of 20 to the measurements, based on the building’s
+responses at the top floor. Consequently, responses at lower building levels become much harder to identify, as the measurement
+signals at those locations are dominated by noise. This effect is illustrated in Fig. 15 (left), which shows the mean and two
+standard deviations of the measurements along the height for both noise-free and noise-contaminated cases. Fig. 15 (right) depicts
+the acceleration response at the top floor in the time domain and its respective power spectral density. To simulate discrete
+measurement locations, we decompose the global responses into their modal components using Ns = 10 measurement signals
+collected at equally spaced points along the height of the building (see Fig. 15, left). Assuming prior knowledge of the mode
+shapes at those locations, which can be obtained using system identification strategies, and considering that only the first Nm = 4
+structural modes can be identified in the noisy signal (see Fig. 15, bottom right, and Fig. 10), the modal decomposition, e.g. for
+accelerations is carried out using a least squares approach by
+14
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+0 100 200 300 400 500 600
+0 100 200 300 400 500 600
+0 100 200 300 400 500 600
+0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0 10 20 30 40
+Figure 13: Morlet wavelet amplitude |W(f,t)|of the true modal force (left), the reconstructed force (centre) based on noiseless
+responses, and their normalised difference (right), considering a central frequency f0 = 4 Hz. The solid line indicates the cone of
+influence. From top to bottom: modes 1 to 6.
+15
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+Figure 14: Comparison metrics for the force reconstruction based on the noiseless measurements of the benchmark building case.
+Metrics values from 0 to 1 denote worse to better results, respectively. From left to right: modes 1 to 6.
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+0.30
+0.15
+0.00
+-0.15
+-0.30
+0
+-0.10 -0.05 0.00 0.05 0.10
+102
+10-2
+10-6
+10-10
+10-2 10-1 100 101
+Figure 15: Benchmark building responses contaminated by white noise. Left: the mean and 2 standard deviations (shaded areas)
+for the true and noisy responses. Black crosses denote virtual sensor locations. Right: the true and noisy acceleration signals at
+floor 76 (top), and the correspondent power spectral densities (bottom).
+¨
+u= ΦTΦ−1 ΦT¨
+z, (28)
+where Φ has size Ns ×Nm, and the modal velocities˙
+uand displacements uare obtained similarly from the global responses˙
+z
+and z. Importantly, we note that the mode shapes Φ are magnitude-normalised to unity, and a correct modal force magnitude
+is achieved by selecting appropriate modal mass values mi for each ith mode shape. In practice, correct modal mass values are
+difficult to obtain, and if not available, the identified dynamic loads are correct only up to a scaling factor.
+Providing the modal responses to the physics-informed GP model and identifying the optimal parameters leads to the modal force
+predictions shown in Fig. 16. For the first two modes, the identification quality remains high, with only a slight reduction in mean
+peak amplitude and no significant prediction uncertainty in the physics-informed Gaussian process. In mode 3, an increase in
+standard deviation is observed, along with the presence of a high-frequency component in the forcing signal due to the noisy
+measurement inputs. Nonetheless, the general behaviour of the modal force is still accurately predicted. In mode 4, the influence
+of measurement noise becomes more pronounced, with high-frequency components from the noise visible in the time domain
+load signal. This results from the low relative modal contribution to the global structural behaviour, as seen in the response power
+spectral density in Fig. 15 (bottom right).
+The high-frequency components in the predicted force are also evident in the wavelet magnitude (see Fig. 17). Similar to the
+noiseless case, the first two modal forces are accurately identified in the time-frequency plane, with only minor errors observed.
+However, in the third and fourth modes, significant errors in the high-frequency content are present throughout the analysis period.
+Specifically, in the fourth mode, the low-frequency content of the true force is not fully captured by the GP model, as indicated by
+the error content for 250 s <t<420 s and f <0.2 Hz. The reconstructed modal forces are further evaluated using comparison
+metrics, as shown in Fig. 18. A slight decrease in most metrics is observed in the first three modes compared to the noiseless
+scenario. Interestingly, the phase metric Mϕ remains unaffected by the noise, while the peak metric Mpeak shows the most
+significant reduction, decreasing by 0.19. The results for the fourth mode reflect the time-domain signal prediction and show clear
+differences across all analyzed comparison metrics.
+16
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+5.0
+2.5
+0.0
+-2.5
+-5.0
+3.0
+1.5
+0.0
+-1.5
+-3.0
+3.0
+1.5
+0.0
+-1.5
+-3.0
+5.0
+2.5
+0.0
+-2.5
+-5.0
+0 100 200 300 400 500 600
+0 100 200 300 400 500 600
+Figure 16: Reconstruction of modal forces in the benchmark building case considering noisy responses along the structure’s height.
+True force qtrue is shown along with mean µq and standard deviation σq of the GP predictions (not visible for modes 1 to 2). Load
+signals from left to right for modes 1 and 2 (top), and 3 and 4 (bottom).
+4.2 Experimental Lillebælt Suspension Bridge scaled model
+4.2.1 Model and experiment description
+The Lillebælt Suspension Bridge, constructed between 1965 and 1970, was Denmark’s first suspension bridge, spanning the
+1200-meter Belt between the Jutland peninsula and the island of Funen. The bridge features a main span of 600 m and two
+side spans of 240 m each. The steel deck, 33.3 m wide, accommodates six traffic lanes and two emergency lanes, supported by
+hangers connected to the main suspension cables, which are anchored 180 m behind the side pylons. As part of the final design
+checks, a 1:200 scaled physical model (see Fig. 19, top) was built to study the bridge’s dynamic properties and roughly verify
+the deformations caused by traffic and constant wind loads [60]. This physical scaled model is currently preserved at Bauhaus
+University Weimar and will be used throughout this section as a representative model for dynamic force reconstruction.
+The measurement system consists of three MEMS-based triaxial accelerometers/gyroscopes of type MPU6050, controlled by
+Raspberry Pi microcomputers (see Fig. 19, bottom centre) [61, 62]. The sampling frequency is set to 200 Hz, with a measurement
+range of ±4 g for the accelerometers, and ±1000 deg/s for the gyroscopes. Sensor locations, schematically shown in Fig. 19
+(top), were determined using a stochastic sensor placement optimization algorithm [63, 64, 40]. This algorithm identifies optimal
+locations by minimizing the entropy of a Gaussian process model with covariance defined by the mode shapes of a numerical
+model of the full-scale bridge. The scaled model is excited using a servo motor with an eccentric mass of m= 24 g attached to a
+lever arm of length l= 2.9 cm, as shown in Fig. 19 (bottom right). The motor can rotate with amplitudes of up toˆ
+α= ±30 degs
+and has a reliable response for oscillation frequencies of up to 10 Hz. The axis of rotation of the motor lever arm is eccentric
+relative to the bridge’s longitudinal axis, allowing excitation of torsional modes of the deck. The forces introduced by the servo
+motor rotation into the bridge model, denoted throughout this section as measurement forces, are analytically calculated using
+rotation measurements collected by a gyroscope installed at the tip of the servo’s lever arm.
+With the measurement sensors and servo motor installed on the bridge, a white noise signal is used to excite the model. The
+response is then processed to extract modal properties using the covariance-driven stochastic subspace identification (COV-SSI)
+method [65, 66]. The stabilization diagram for the analysis is shown in Fig. 20, where pole stability is defined by a maximum of
+5% error in frequency, damping ratio, or modal assurance criterion (MAC) for increasing system orders. Estimating the damping
+ratio ζis challenging due to the assumptions about its nature and the noise effects on measurement signals. Therefore, they are
+estimated in a secondary step using logarithmic decrement analysis. This involves measuring free decay datasets individually for
+each natural frequency and mode shape, which are identified via COV-SSI. In addition, operational modal analysis techniques,
+such as COV-SSI, yield only arbitrarily scaled mode shapes [67], meaning the underlying dynamic loads can only be determined
+up to a scaling factor. In practice, normalized mode shapes can be used if the correct modal masses are available, typically from
+calibrated finite element models or more specific system identification procedures [68, 69]. In our application, modal masses are
+obtained using an experimental modal analysis technique, by applying single harmonic forces at each modal frequency identified
+by COV-SSI and comparing the force and response amplitudes [67]. The modal properties of the laboratory structure are presented
+in Tab. 1. A schematic of the mode shapes obtained from a finite element model of the full-scale structure is shown in Fig. 21 for
+17
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+1.0
+0.8
+0.6
+0.4
+0.2
+0.0
+0 100 200 300 400 500 600
+0 100 200 300 400 500 600
+0 100 200 300 400 500 600
+0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0 10 20 30 40
+Figure 17: Morlet wavelet amplitude |W(f,t)|of the true modal force (left), the reconstructed force (centre) based on noisy
+responses, and their normalised difference (right), considering a central frequency f0 = 4 Hz. The solid line indicates the cone of
+influence. From top to bottom: modes 1 to 4.
+Noiseless
+Noisy
+Figure 18: Comparison metrics for the force reconstruction based on the noise-contaminated measurements of the benchmark
+building case, with the noiseless results shown for comparison. Metrics values from 0 to 1 denote worse to better results,
+respectively. From left to right: modes 1 to 4.
+18
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+120 110 190 120
+65 55 60 130 110 120
+120 300 120 [cm]
+(c)
+(d)
+(a) (b)
+(b)
+(a)
+Figure 19: Top: Schematic of the 1:200 scaled model of the Lillebælt Bridge in Denmark, showing the servo position (blue) and
+measurement sensor locations (red). Dimensions in centimeters. Bottom: the scaled model of the Lillebælt Bridge (left), currently
+located at the Bauhaus University Weimar. Bottom centre: a power bank (a) supplies energy to a RaspberryPi (b), which controls
+the triaxial MEMS-based accelerometer/gyroscope (c) used to measure the structural responses. Bottom right: a similar framework
+is used to control the servo motor (d) used to excite the structure.
+Table 1: Modal masses m, damping ratios ζand frequencies f of the scaled model of the Lillebælt Bridge.
+Mode number Mode type Modal properties
+m[kg] ζ[%] f [Hz]
+1 Bending 0.113 0.23 2.090
+2 Bending 0.378 0.36 2.232
+3 Bending 0.355 0.19 3.801
+4 Torsional 0.027 0.32 8.005
+reference. It is important to note that the mode shapes used for modal decomposition in Sec. 4.2.2 are obtained from the structural
+response and experimentally identified via COV-SSI.
+4.2.2 Pseudo-random load reconstruction
+To test the force reconstruction model, we apply a pseudo-random motion to the servo motor, combining a low-level Gaussian
+noise and harmonic signals with frequency components within ±0.1 Hz of the scaled Lilleælt model’s natural frequencies. This
+approach aims to excite the structure and generate measurable responses, which cannot be achieved with Gaussian noise alone due
+to the limitations imposed by the servo motor’s attached mass and rotation amplitude and velocity. In this section, the gyroscope
+measurements of the rotation of the servo’s lever arm (see Fig. 22, top) are used to analytically calculate the forces input into the
+structure, which we denote as reference values qref . The measured structural accelerations are displayed in Fig. 22 (bottom).
+The measured responses are converted into modal components using the identified mode shapes from COV-SSI and Eq. (28). These
+modal components, along with the corresponding modal mass, damping, and stiffness, are then input into the physics-informed
+Gaussian process. Given prior knowledge of the structural natural frequencies, the frequency range considered was restricted to
+19
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+Figure 20: Stabilisation diagram of the measured response due to a white noise signal applied to the Lillebælt scaled model.
+Mode 1 - f1 = 2.090 Hz Mode 2 - f2 = 2.232 Hz
+Mode 3 - f3 = 3.801 Hz Mode 4 - f4 = 8.005 Hz
+Figure 21: Schematic of the mode shapes identified in the Lillebælt scaled model, with the locations of the measuring sensors and
+servo motor shown for reference (c.f. Fig. 19, top). It is important to note that the mode shapes used for modal decomposition in
+Sec. 4.2.2 are obtained experimentally from the structural response and identified via COV-SSI.
+1.8 ≤fr ≤9.0 Hz. Figure 23 presents the modal force predictions for the second modal case in both the time and frequency
+domains, alongside a comparison with the reference forces calculated from servo movement measurements. The reconstructed
+forces show lower amplitudes compared to the reference forces. However, a closer examination of the time-domain results (Fig. 23,
+bottom left) reveals generally good agreement, particularly in terms of phase angle between the two signals. In the frequency
+domain (Fig. 23, bottom right), the GP model accurately captures peaks in relevant harmonics and does not exhibit significant
+components outside the specified frequency range. The absence of frequencies beyond the interest range may explain the observed
+reduction in force amplitude in the time domain.
+A detailed examination of the frequency content of the reference forces and the reconstructed forces is presented through their
+wavelet analysis in Fig. 24. As observed in previous cases, the reconstruction quality is better for the first two modal cases,
+20
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+30
+15
+0
+-15
+-30
+10-2
+10-4
+10-6
+10-8
+10-10
+10-12
+30 32 34 36 38 40
+0 2 4 6 8 10
+0.15
+0.10
+0.05
+0.00
+-0.05
+-0.10
+-0.15
+0 30 60 90 120 150 180
+0 30 60 90 120 150 180
+0 30 60 90 120 150 180
+Figure 22: Top: a detailed view of the true servo lever arm rotations as measured by the installed gyroscope (left), and their
+corresponding power spectral densities (right). Bottom: vertical acceleration response of the scaled Lillebælt Bridge model,
+measured by the three sensors (in order, from left to right, c.f. Fig. 19, top).
+2.50 10-2
+1.25
+0.00
+-1.25
+-2.50
+0 30 60 90 120 150 180
+2.50 10-2
+1.25
+0.00
+-1.25
+-2.50
+30 31 32 33 34
+103
+100
+10-3
+10-6
+10-9
+10-12
+0 2 4 6 8 10
+Figure 23: Top: modal force reconstruction (mode 2) of the scaled Lillebælt Bridge model, based on the modal decomposition
+of the measured responses (c.f. Fig. 22). Bottom: a detailed view of the reconstructed random force (left, corresponding to the
+grey shaded area in the top plot), and the respective force power spectral density (right). Results for the true force (in blue) are
+calculated from the servo movement measured by a gyroscope installed at the motor lever arm.
+where the lower structural modal stiffness results in higher modal response amplitudes and reduced influence of measurement
+noise. In the third mode, significant errors are noted in the frequencies governing the structure’s movement. The GP model
+tends to underestimate the effects of high-frequency forces (e.g., f ≈8.0 Hz) while overestimating the amplitudes of lower-
+frequency components, particularly around the first two modal frequencies (f ≈2.1 Hz). For the fourth mode, the GP model
+21
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+10
+8
+6
+4
+2
+0
+10
+8
+6
+4
+2
+0
+10
+8
+6
+4
+2
+0
+10
+8
+6
+4
+2
+0
+0 30 60 90 120
+0 30 60 90 120
+0 30 60 90 120
+0.0 0.2 0.4 0.6 0.8 1.0 0.0 0.2 0.4 0.6 0.8 1.0 0 10 20 30 40 50
+Figure 24: Morlet wavelet amplitude |W(f,t)|of the reference modal force as calculated from the servo motor’s measurements
+(left), the reconstructed force from the measured responses (centre), and their normalised difference (right), considering a central
+frequency f0 = 4 Hz. The solid line indicates the cone of influence. From top to bottom: modes 1 to 4 (see Tab. 1).
+underestimates the amplitude of all governing frequencies and compensates by including high-amplitude force components in the
+medium-to-low-frequency range (f ≤4.0 Hz).
+These observations are reflected in Fig. 25, which shows the comparison metrics for the four modal forces relative to their reference
+counterparts. Generally, the first two modal cases exhibit high metric values. However, in mode 2, a decrease in Mrms and MR2
+is noted, consistent with the discrepancies observed in the frequency domain (see Fig. 24). In the third modal case, a significant
+reduction in all metrics is observed, particularly in MR2 and Mϕ, indicating phase angle discrepancies and suggesting that the
+model struggles to replicate the measurements accurately. For mode 4, all comparison metrics fall below 0.50, indicating that the
+GP model fails to reconstruct the modal forces effectively, likely due to mode’s low response contribution.
+5 Summary and conclusions
+This paper introduces an efficient dynamic load reconstruction framework using a physics-informed Gaussian process built using
+frequency-sparse Fourier basis functions. The model’s prior is built initially for structural displacements, and further extended
+through analytical time derivatives to develop models for velocities and accelerations, enabling joint training with multi-fidelity or
+heterogeneous measurement datasets.
+To address the computational complexity of training GP models with large datasets, the model leverages the sparsity of structural
+responses in the frequency domain to filter out frequency components with low contribution to the responses, thereby reducing the
+22
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+Figure 25: Comparison metrics between the reference forces calculated from the servo movement’s measurements and reconstructed
+from the response measurements of the scaled model of the Lillebælt Bridge. Metrics values from 0 to 1 denote worse to better
+results, respectively. From left to right: modes 1 to 4 (see Tab. 1).
+number of effective basis functions. In addition, this allows for the prior specification of important target frequency ranges in the
+forcing signal. Matrix inversion is performed using the Woodbury matrix identity. The trained model for structural responses is
+then integrated with the differential equation for a harmonic oscillator, creating a dynamic load model that predicts load patterns
+without requiring force data during training. This approach is particularly advantageous for rare events or unusual load conditions.
+The model assumes linear behaviour of the structural system throughout the analysis period. In non-linear systems or in the case of
+additional quasi-static applied loads, this assumption can be addressed by linearizing the system around a specific equilibrium
+point. Alternatively, the assumption can be relaxed by shortening the prediction duration and employing system identification
+techniques to estimate time-varying structural parameters. In addition, other sources of uncertainty throughout the presented
+framework (e.g. modal mass, damping and frequency deviations, mode shape inaccuracies, sensor quantization, sensitivity and
+range, etc.) may also adversely affect the model prediction quality. Their individual effects on the identified dynamic modal load
+are propagated through the presented model, from the prior to the posterior phases, and merit further specific investigations.
+The model’s effectiveness was demonstrated through two case studies: a numerical model of a wind-excited 76-story benchmark
+building from the literature and the force reconstruction of an experimental scaled model of the Lillebælt Suspension Bridge,
+which was excited using a dedicated servo motor. Filtering irrelevant frequency content was explored, and the impact on the
+reconstructed forces was analyzed in both the time and frequency domains.
+The physics-informed GP model exhibited good force reconstruction quality, as shown in the time-frequency plane and validated
+through various comparison metrics, including root mean squared values, magnitudes, phase angles, peaks, correlations, the
+coefficient of determination, and wavelet analysis. Generally, the model achieved better agreement between true and reconstructed
+forces in low-frequency regions, which are less affected by noise in MEMS-based sensors and, in our examples, have higher
+structural mechanical admittance values. Conversely, reconstructing higher modal contributions proved more challenging due to
+their lower response contribution. In general, high frequency content was captured by the GP model as part of its uncertainty range.
+The developed model incorporates a self-balancing mechanism that manages the trade-off between data fitting and model
+complexity, eliminating the need for regularization parameters often required by similar force reconstruction algorithms. It
+also enables the simultaneous use of multiple datasets of structural responses during training without requiring measurement
+synchronization or regular sampling intervals. This model holds potential for applications in structural health monitoring, structural
+damage assessment, and load model validation. Future research may focus on extending the model to handle non-linear systems
+and non-stationary events, such as impact loads, and identifying loads associated with rare structural events, such as extreme wind
+conditions or specific traffic scenarios.
+Acknowledgments
+IK gratefully acknowledges the support by the German Research Foundation (DFG) [Project No. 491258960], Darwin College
+and the Department of Engineering, University of Cambridge.
+References
+[1] J Sanchez and Haym Benaroya. Review of force reconstruction techniques. Journal of Sound and Vibration, 333(14):2999–
+3018, 2014.
+23
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+[2] V Jayalakshmi, K Lakshmi, and A Rama Mohan Rao. Dynamic force reconstruction techniques from incomplete measure-
+ments. Journal of Vibration and Control, 24(22):5321–5344, 2018.
+[3] XQ Jiang and HY Hu. Reconstruction of distributed dynamic loads on an euler beam via mode-selection and consistent
+spatial expression. Journal of Sound and Vibration, 316(1-5):122–136, 2008.
+[4] XQ Jiang and HY Hu. Reconstruction of distributed dynamic loads on a thin plate via mode-selection and consistent spatial
+expression. Journal of Sound and Vibration, 323(3-5):626–644, 2009.
+[5] MC Djamaa, Nouredine Ouelaa, Charles Pezerat, and Jean-Louis Guyader. Reconstruction of a distributed force applied on a
+thin cylindrical shell by an inverse method and spatial filtering. Journal of sound and vibration, 301(3-5):560–575, 2007.
+[6] Peiliang Xu. Truncated svd methods for discrete linear ill-posed problems. Geophysical Journal International, 135(2):505–
+514, 1998.
+[7] Zhen Chen and Tommy HT Chan. A truncated generalized singular value decomposition algorithm for moving force
+identification with ill-posed problems. Journal of Sound and Vibration, 401:297–310, 2017.
+[8] L. Dykes and L. Reichel. Simplified gsvd computations for the solution of linear discrete ill-posed problems. Journal of
+Computational and Applied Mathematics, 255:15–27, 2014.
+[9] Siu-Seong Law, Tommy HT Chan, and QH Zeng. Moving force identification: a time domain method. Journal of Sound and
+vibration, 201(1):1–22, 1997.
+[10] Li Li and Yujin Hu. Generalized mode acceleration and modal truncation augmentation methods for the harmonic response
+analysis of nonviscously damped systems. Mechanical Systems and Signal Processing, 52:46–59, 2015.
+[11] Michael Vigsø, Rune Brincker, and Christos Georgakis. The effect of modal truncation and spatial distribution in load
+identification. In Proceedings of the International Operational Modal Analysis Conference, pages 553–557, 2019.
+[12] A Kazemi Amiri and C Bucher. Derivation of a new parametric impulse response matrix utilized for nodal wind load
+identification by response measurement. Journal of Sound and Vibration, 344:101–113, 2015.
+[13] Yixian Li, Wei Tian, Yong Xia, and Limin Sun. Principal force pattern and impulse response mode for structural equivalent
+force estimation and full-field response reconstruction. Mechanical Systems and Signal Processing, 200:110660, 2023.
+[14] Ali Rezayat, Vahid Nassiri, Ben De Pauw, Julien Ertveldt, Steve Vanlanduit, and Patrick Guillaume. Identification of dynamic
+forces using group-sparsity in frequency domain. Mechanical Systems and Signal Processing, 70:756–768, 2016.
+[15] Pooya Ghaderi, Andrew J Dick, Jason R Foley, and Gregory Falbo. Practical high-fidelity frequency-domain force and
+location identification. Computers & Structures, 158:30–41, 2015.
+[16] Baijie Qiao, Xingwu Zhang, Chenxi Wang, Hang Zhang, and Xuefeng Chen. Sparse regularization for force identification
+using dictionaries. Journal of Sound and Vibration, 368:71–86, 2016.
+[17] Baijie Qiao, Xingwu Zhang, Jiawei Gao, and Xuefeng Chen. Impact-force sparse reconstruction from highly incomplete and
+inaccurate measurements. Journal of Sound and Vibration, 376:72–94, 2016.
+[18] Baijie Qiao, Xingwu Zhang, Jiawei Gao, Ruonan Liu, and Xuefeng Chen. Sparse deconvolution for the large-scale ill-posed
+inverse problem of impact force reconstruction. Mechanical Systems and Signal Processing, 83:93–115, 2017.
+[19] Zong Li, Zhipeng Feng, and Fulei Chu. A load identification method based on wavelet multi-resolution analysis. Journal of
+sound and Vibration, 333(2):381–391, 2014.
+[20] Y M Mao, X L Guo, and Y Zhao. Experimental study of hammer impact identification on a steel cantilever beam.
+Experimental techniques, 34:82–85, 2010.
+[21] E Jacquelin, A Bennani, and P Hamelin. Force reconstruction: analysis and regularization of a deconvolution problem.
+Journal of sound and vibration, 265(1):81–107, 2003.
+[22] Jiang Wensong, Wang Zhongyu, and Lv Jing. A fractional-order accumulative regularization filter for force reconstruction.
+Mechanical Systems and Signal Processing, 101:405–423, 2018.
+[23] Mathieu Aucejo, Olivier De Smet, and J-F Deü. On a space-time regularization for force reconstruction problems. Mechanical
+Systems and Signal Processing, 118:549–567, 2019.
+[24] Mathieu Aucejo and Olivier De Smet. An optimal bayesian regularization for force reconstruction problems. Mechanical
+Systems and Signal Processing, 126:98–115, 2019.
+[25] Yaru Liu, Lei Wang, Zhiping Qiu, and Xiao Chen. A dynamic force reconstruction method based on modified kalman filter
+using acceleration responses under multi-source uncertain samples. Mechanical Systems and Signal Processing, 159:107761,
+2021.
+[26] Wei Feng, Qiaofeng Li, and Qiuhai Lu. Force localization and reconstruction based on a novel sparse kalman filter.
+Mechanical Systems and Signal Processing, 144:106890, 2020.
+24
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+[27] Øyvind Wiig Petersen, Ole Øiseth, Torodd S Nord, and E Lourens. Estimation of the full-field dynamic response of a floating
+bridge using kalman-type filtering algorithms. Mechanical Systems and Signal Processing, 107:12–28, 2018.
+[28] Yaru Liu, Lei Wang, Kaixuan Gu, and Min Li. Artificial neural network (ann)-bayesian probability framework (bpf) based
+method of dynamic force reconstruction under multi-source uncertainties. Knowledge-based systems, 237:107796, 2022.
+[29] Tao Chen, Liang Guo, Andongzhe Duan, Hongli Gao, Tingting Feng, and Yichen He. A feature learning-based method for
+impact load reconstruction and localization of the plate-rib assembled structure. Structural Health Monitoring, 21(4):1590–
+1607, 2022.
+[30] Mauricio A Alvarez, David Luengo, and Neil D Lawrence. Linear latent force models using gaussian processes. IEEE
+transactions on pattern analysis and machine intelligence, 35(11):2693–2705, 2013.
+[31] Rajdip Nayek, Souvik Chakraborty, and Sriram Narasimhan. A gaussian process latent force model for joint input-state
+estimation in linear structural systems. Mechanical Systems and Signal Processing, 128:497–530, 2019.
+[32] ØW Petersen, O Øiseth, and E Lourens. Wind load estimation and virtual sensing in long-span suspension bridges using
+physics-informed gaussian process latent force models. Mechanical Systems and Signal Processing, 170:108742, 2022.
+[33] Gledson Rodrigo Tondo, Igor Kavrakov, and Guido Morgenthal. A physics-informed machine learning model for recon-
+struction of dynamic loads. In Proceedings of the IABSE Symposium: Long Span Bridges, Istanbul, TK, pages 315–322,
+2023.
+[34] Gledson Rodrigo Tondo, Igor Kavrakov, and Guido Morgenthal. Bayesian non-linear load estimation in long-span bridges
+via physics-informed gaussian processes. In Proceedings of the Bridge Maintenance, Safety, Management, Digitalization and
+Sustainability (IABMAS), Copenhagen, pages 3522–3529, 2024.
+[35] Alice Cicirello. Physics-enhanced machine learning: a position paper for dynamical systems investigations, 2024.
+[36] Carl Edward Rasmussen and Christopher K. I. Williams. Gaussian Processes for Machine Learning, volume 2 of 3. The
+MIT Press, 2006.
+[37] Igor Kavrakov, Guido Morgenthal, and Allan McRobie. Data-driven aeroelastic analyses of structures in turbulent wind
+conditions using enhanced gaussian processes with aerodynamic priors. Journal of Wind Engineering and Industrial
+Aerodynamics, 253:105848, 2024.
+[38] Igor Kavrakov, Gledson Rodrigo Tondo, and Guido Morgenthal. Stochastic inference of plate bending from heterogeneous
+data: Physics-informed gaussian processes via kirchhoff-love theory. arXiv preprint arXiv:2405.12802, 2024.
+[39] Victor Sreeram and P Agathoklis. On the properties of gram matrix. IEEE Transactions on Circuits and Systems I:
+Fundamental Theory and Applications, 41(3):234–237, 1994.
+[40] Gledson Rodrigo Tondo, Sebastian Rau, Igor Kavrakov, and Guido Morgenthal. Stochastic stiffness identification and
+response estimation of timoshenko beams via physics-informed gaussian processes. Probabilistic Engineering Mechanics,
+74:103534, 2023.
+[41] Gledson Rodrigo Tondo, Sebastian Rau, Igor Kavrakov, and Guido Morgenthal. Physics-informed Gaussian process model
+for Euler-Bernoulli beam elements. In IABSE Symposium Prague, pages 445–452, 2022.
+[42] James Hensman, Nicolò Fusi, and Neil D Lawrence. Gaussian processes for big data. In Proceedings of the Twenty-Ninth
+Conference on Uncertainty in Artificial Intelligence, pages 282–290, 2013.
+[43] Michalis Titsias. Variational learning of inducing variables in sparse gaussian processes. In Artificial intelligence and
+statistics, pages 567–574. PMLR, 2009.
+[44] Joaquin Quinonero-Candela and Carl Edward Rasmussen. A unifying view of sparse approximate gaussian process regression.
+Journal of Machine Learning Research, 6:1939–1959, 2005.
+[45] Krzysztof Chalupka, Christopher KI Williams, and Iain Murray. A framework for evaluating approximation methods for
+gaussian process regression. Journal of Machine Learning Research, 14(1), 2013.
+[46] Edward Snelson and Zoubin Ghahramani. Sparse gaussian processes using pseudo-inputs. Advances in neural information
+processing systems, 18, 2005.
+[47] Volker Tresp. A bayesian committee machine. Neural computation, 12(11):2719–2741, 2000.
+[48] Geoffrey E Hinton. Training products of experts by minimizing contrastive divergence. Neural computation, 14(8):1771–1800,
+2002.
+[49] Haitao Liu, Jianfei Cai, Yi Wang, and Yew Soon Ong. Generalized robust bayesian committee machine for large-scale
+gaussian process regression. In International Conference on Machine Learning, pages 3131–3140. PMLR, 2018.
+[50] Haitao Liu, Jianfei Cai, Yew-Soon Ong, and Yi Wang. Understanding and comparing scalable gaussian process regression
+for big data. Knowledge-Based Systems, 164:324–335, 2019.
+25
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+[51] Nicholas J Higham. Accuracy and stability of numerical algorithms. SIAM, 2002.
+[52] David A Harville. Matrix algebra from a statistician’s perspective. Taylor & Francis, 1998.
+[53] Claude Elwood Shannon. Communication in the presence of noise. Proceedings of the IRE, 37(1):10–21, 1949.
+[54] E. Lourens, E. Reynders, G. De Roeck, G. Degrande, and G. Lombaert. An augmented kalman filter for force identification
+in structural dynamics. Mechanical Systems and Signal Processing, 27:446–460, 2012.
+[55] JW Draper III, SW Lee, and EC Marineau. Numerical construction of impulse response functions and input signal
+reconstruction. Journal of Sound and Vibration, 432:259–271, 2018.
+[56] Per Christian Hansen. Analysis of discrete ill-posed problems by means of the l-curve. SIAM review, 34(4):561–580, 1992.
+[57] Jann N Yang, Anil K Agrawal, Bijan Samali, and Jong-Cheng Wu. Benchmark problem for response control of wind-excited
+tall buildings. Journal of engineering mechanics, 130(4):437–446, 2004.
+[58] Igor Kavrakov, Ahsan Kareem, and Guido Morgenthal. Comparison metrics for time-histories: Application to bridge
+aerodynamics. Journal of Engineering Mechanics, 146(9):04020093, 2020.
+[59] Emil Simiu and Robert H Scanlan. Wind effects on structures: fundamentals and applications to design, volume 688. John
+Wiley New York, 1996.
+[60] Baris Wenzel, Eberhard Möller, Benjamin Schmid, Christiane Weber, and Guidl Morgenthal. The new little best bridge - the
+role of the physical model and its digital twin. In IABSE Symposium Prague, pages 702–709, 2022.
+[61] Guido Morgenthal, Jan Frederick Eick, Sebastian Rau, and Jakob Taraben. Wireless sensor networks composed of standard
+microcomputers and smartphones for applications in structural health monitoring. Sensors, 19(9):2070, 2019.
+[62] Guido Morgenthal, Sebastian Rau, and Markus Nowack. Effizientes Bauwerksmonitoring mit MEMS-Neigungssensoren und
+Mikrocontrollern. Fraunhofer IRB Verlag, ISBN: 978–3–7388–0327–3, 2019.
+[63] Carlos Guestrin, Andreas Krause, and Ajit Paul Singh. Near-optimal sensor placements in Gaussian processes. In
+Proceedings of the 22nd International Conference on Machine Learning, ICML ’05, pages 265–272, New York, NY, USA,
+2005. Association for Computing Machinery.
+[64] Andreas Krause, Ajit Singh, and Carlos Guestrin. Near-Optimal Sensor Placements in Gaussian Processes: Theory, Efficient
+Algorithms and Empirical Studies. Journal of Machine Learning Research, 9:235–284, 2008.
+[65] Bart Peeters and Guido De Roeck. Reference-based stochastic subspace identification for output-only modal analysis.
+Mechanical systems and signal processing, 13(6):855–878, 1999.
+[66] Bart Peeters and Guido De Roeck. Reference based stochastic subspace identification in civil engineering. Inverse problems
+in Engineering, 8(1):47–74, 2000.
+[67] David J Ewins. Modal testing: theory, practice and application. John Wiley & Sons, 2009.
+[68] G Acunzo, N Fiorini, F Mori, and D Spina. Modal mass estimation from ambient vibrations measurement: A method for
+civil buildings. Mechanical Systems and Signal Processing, 98:580–593, 2018.
+[69] Jae-Seung Hwang, Sang-Hyun Lee, and Ahsan Kareem. Estimation of modal masses of a structure with a mass-type damping
+device. Engineering Structures, 99:149–156, 2015.
+A Comparison metrics
+Herein, we briefly introduce each of the employed comparison metrics. Complete and detailed information is given by Kavrakov
+et al. [58]. In general, a comparison metric lies in the interval between 0 and 1, where unity indicates no discrepancies between
+two signals xand y. It is calculated as
+M(x,y) = e−λA(x,y)
+, (29)
+where λ≥0 is a sensitivity parameter and A(x,y) in a relative exponent that depends on each metric.
+The root mean square metric Mrms, is closely related to the signal energy, as it can be directly obtained from its power spectral
+density. Herein, its relative exponent is calculated as
+Arms =
+1
+T
+T
+0 [x(t)]2 dt−
+1
+T
+T
+0 [y(t)]2 dt
+1
+T
+T
+0 [x(t)]2 dt
+. (30)
+26
+SUBMITTED TO MECHANICAL SYSTEMS AND SIGNAL PROCESSING
+The correlation metric Mc indicates the degree of linear correlation between the two signals as a factor or their covariance
+normalised by their standard deviation, and is defined by
+cov(x,y)
+Ac =
+. (31)
+σxσy
+This metric is closely related to the phase metric Mϕ, which accounts for mean phase discrepancies and is obtained as
+argmax [x⋆y]
+Aϕ=
+, (32)
+Tc
+where ⋆is the cross-correlation operator and Tc is a normalisation time considered to be a significant delay between the signals x
+and y.
+The peak metric Mpeak measures the signal’s highest value discrepancies, and its relative exponent is defined as
+Apeak=
+|max|x|−max|y||
+max|x|. (33)
+The warped magnitude metric Mm determines signal discrepancies based on the dynamic time warping (DTW) algorithm, thereby
+considering time-localized effecs and alleviating phase shift issues. The corresponding exponents is calculated by
+Am =
+1
+Nw
+Nw
+i (xi,w−yi,w)2
+1
+Nw
+i (xi,w)2 , (34)
+Nw
+where xj,w and yj,w for i= {1,...,Nw}are warped versions of the discretised signals xand y.
+The wavelet metric MW quantifies differences in the time-frequency plane of a signal in a localised manner, similar to the warped
+magnitude metric. It is obtained as
+AW =
+1
+T
+T
+0
+∞
+0
+|Wx |
+|Wy |
+−
+Wxf,max
+Wyf,max
+2
+df
+∞
+0
+|Wx |
+Wxf,max
+2
+df
+, (35)
+where Wi(t,f) is the wavelet coefficient for signal i, and Wifj ,max = max|Wi(t,fj)|is a normalization factor for each frequency
+component fj. Finally, the coefficient of determination MR2 metric measures the proportion of prediction error in relation to the
+variance of the original signal. This metric has a maximum value of 1 by definition, being calculated as
+MR2 = 1−
+(x−y)2
+(x−µx)2 , (36)
+with µx being the mean of the reference signal.
+27

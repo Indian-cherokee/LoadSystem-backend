@@ -72,10 +72,7 @@ func (h *Handler) RegisterAPI(r *gin.RouterGroup) {
 	}
 
 	// Внутренний endpoint для приема результатов от асинхронного сервиса
-	internal := r.Group("/internal")
-	{
-		internal.PUT("/loads/updating", h.UpdateLoadSessionTotalLoad)
-	}
+	r.PUT("/total_loads/updating", h.UpdateLoadSessionTotalLoad)
 }
 
 func (h *Handler) errorHandler(ctx *gin.Context, errorStatusCode int, err error) {
